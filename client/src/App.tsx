@@ -3,14 +3,16 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/not-found";
+import Home from "@/pages/Home";
+import PodcastDetail from "@/pages/PodcastDetail";
+import NotFound from "@/pages/NotFound";
 
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/" component={Home} />
+      <Route path="/episodes" component={Home} /> {/* Reuse Home for list view for now */}
+      <Route path="/podcasts/:id" component={PodcastDetail} />
       <Route component={NotFound} />
     </Switch>
   );
