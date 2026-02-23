@@ -1,6 +1,12 @@
 node_modules
 dist
 .DS_Store
+.env
+.env.local
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Windows Zone.Identifier files (WSL artifact)
+*:Zone.Identifier
+*.Zone.Identifier

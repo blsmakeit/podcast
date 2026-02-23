@@ -1,15 +1,15 @@
-import { ReactNode } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import logo from "@assets/screenshot-1771582051592.png";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
-import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Menu, Lock, Unlock, Settings } from "lucide-react";
+import { useBackoffice } from "@/components/backoffice/BackofficeContext";
 
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({ children }) {
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { isAdmin, openLogin, logout } = useBackoffice();
 
   const navItems = [
     { label: "Home", href: "/" },
@@ -19,17 +19,24 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-body">
+      {/* Admin banner */}
+      {isAdmin && (
+        <div className="bg-primary text-primary-foreground py-2 px-4 text-center text-sm font-semibold flex items-center justify-center gap-3">
+          <Settings className="w-4 h-4 animate-spin-slow" />
+          <span>BACKOFFICE MODE ACTIVE — You have admin controls enabled.</span>
+          <button
+            onClick={logout}
+            className="underline underline-offset-2 hover:opacity-80 transition-opacity ml-2"
+          >
+            Exit Admin
+          </button>
+        </div>
+      )}
+
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative overflow-hidden rounded-lg">
-              <img 
-                src={logo} 
-                alt="MAKEIT Logo" 
-                className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
-              />
-            </div>
-            <span className="font-display font-bold text-xl tracking-tight hidden sm:block">
+            <span className="font-display font-bold text-xl tracking-tight">
               MAKEIT<span className="text-primary">.TECH</span>
             </span>
           </Link>
@@ -37,8 +44,8 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6">
             {navItems.map((item) => (
-              <Link 
-                key={item.href} 
+              <Link
+                key={item.href}
                 href={item.href}
                 className={cn(
                   "text-sm font-medium transition-colors hover:text-primary",
@@ -48,9 +55,11 @@ export function Layout({ children }: { children: ReactNode }) {
                 {item.label}
               </Link>
             ))}
-            <Button size="sm" className="font-semibold shadow-lg shadow-primary/20">
-              Subscribe
-            </Button>
+            <Link href="/subscribe">
+              <Button size="sm" className="font-semibold shadow-lg shadow-primary/20">
+                Subscribe
+              </Button>
+            </Link>
           </nav>
 
           {/* Mobile Nav */}
@@ -64,8 +73,8 @@ export function Layout({ children }: { children: ReactNode }) {
               <SheetContent side="right">
                 <div className="flex flex-col gap-4 mt-8">
                   {navItems.map((item) => (
-                    <Link 
-                      key={item.href} 
+                    <Link
+                      key={item.href}
                       href={item.href}
                       className={cn(
                         "text-lg font-medium transition-colors hover:text-primary",
@@ -76,7 +85,11 @@ export function Layout({ children }: { children: ReactNode }) {
                       {item.label}
                     </Link>
                   ))}
-                  <Button className="w-full mt-4">Subscribe</Button>
+                  <Link href="/subscribe">
+                    <Button className="w-full mt-4" onClick={() => setIsMobileMenuOpen(false)}>
+                      Subscribe
+                    </Button>
+                  </Link>
                 </div>
               </SheetContent>
             </Sheet>
@@ -91,7 +104,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <footer className="border-t py-12 bg-muted/30">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
-            <img src={logo} alt="MAKEIT" className="h-8 w-auto grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-300" />
+            <span className="font-display font-bold text-lg">MAKEIT<span className="text-primary">.TECH</span></span>
             <p className="text-sm text-muted-foreground">
               Empowering creators and builders with cutting-edge technology and insights.
             </p>
@@ -99,29 +112,41 @@ export function Layout({ children }: { children: ReactNode }) {
           <div>
             <h4 className="font-display font-bold mb-4">Platform</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-primary transition-colors">Episodes</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Series</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Hosts</a></li>
+              <li><Link href="/episodes" className="hover:text-primary transition-colors">Episodes</Link></li>
+              <li><Link href="/series" className="hover:text-primary transition-colors">Series</Link></li>
+              <li><Link href="/hosts" className="hover:text-primary transition-colors">Hosts</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="font-display font-bold mb-4">Company</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
+              <li><Link href="/about" className="hover:text-primary transition-colors">About Us</Link></li>
+              <li><Link href="/careers" className="hover:text-primary transition-colors">Careers</Link></li>
+              <li><Link href="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="font-display font-bold mb-4">Legal</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-primary transition-colors">Privacy</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Terms</a></li>
+              <li><Link href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="hover:text-primary transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} MAKEIT.TECH. All rights reserved.
+
+        <div className="container mx-auto px-4 mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} MAKEIT.TECH. All rights reserved.
+          </p>
+          {/* Subtle admin toggle */}
+          <button
+            onClick={isAdmin ? logout : openLogin}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            title={isAdmin ? "Exit backoffice" : "Backoffice access"}
+          >
+            {isAdmin ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+            {isAdmin ? "Exit Admin" : "Admin"}
+          </button>
         </div>
       </footer>
     </div>

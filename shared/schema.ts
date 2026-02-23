@@ -2,12 +2,25 @@ import { pgTable, text, serial, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const EPISODE_CATEGORIES = [
+  "Technology",
+  "Hardware & PCB",
+  "Design",
+  "Business",
+  "AI & Software",
+  "Innovation",
+  "Other",
+] as const;
+
+export type EpisodeCategory = typeof EPISODE_CATEGORIES[number];
+
 export const podcasts = pgTable("podcasts", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
   videoUrl: text("video_url").notNull(),
   thumbnailUrl: text("thumbnail_url").notNull(),
+  category: text("category").notNull().default("Technology"),
   transcripts: jsonb("transcripts").$type<Array<{time: string, topic: string, text: string}>>().notNull().default([]),
 });
 

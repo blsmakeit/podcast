@@ -1,0 +1,12 @@
+[build]
+  command   = "npm run build:client"
+  publish   = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Redirect all routes to index.html for the SPA router
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
