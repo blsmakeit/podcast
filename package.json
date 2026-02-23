@@ -4,9 +4,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
+    "dev": "NODE_ENV=development tsx --env-file=.env server/index.ts",
     "dev:client": "vite",
-    "build": "tsx script/build.ts",
+    "build": "tsx --env-file=.env script/build.ts",
     "build:client": "vite build",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",

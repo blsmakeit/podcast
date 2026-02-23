@@ -106,7 +106,7 @@ export function Layout({ children }) {
       <footer className="border-t py-12 bg-muted/30">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
-            <img src="/logo.svg" alt="MAKEIT.TECH" className="h-7 w-auto" />
+            <img src="/logo.png" alt="MAKEIT.TECH" className="h-7 w-auto" />
             <p className="text-sm text-muted-foreground">
               Empowering creators and builders with cutting-edge technology and insights.
             </p>
