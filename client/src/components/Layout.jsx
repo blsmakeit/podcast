@@ -35,10 +35,12 @@ export function Layout({ children }) {
 
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 group">
-            <span className="font-display font-bold text-xl tracking-tight">
-              MAKEIT<span className="text-primary">.TECH</span>
-            </span>
+          <Link href="/" className="flex items-center group">
+            <img
+              src="/logo.png"
+              alt="MAKEIT.TECH"
+              className="h-8 w-auto"
+            />
           </Link>
 
           {/* Desktop Nav */}
@@ -104,7 +106,7 @@ export function Layout({ children }) {
       <footer className="border-t py-12 bg-muted/30">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
-            <span className="font-display font-bold text-lg">MAKEIT<span className="text-primary">.TECH</span></span>
+            <img src="/logo.svg" alt="MAKEIT.TECH" className="h-7 w-auto" />
             <p className="text-sm text-muted-foreground">
               Empowering creators and builders with cutting-edge technology and insights.
             </p>
