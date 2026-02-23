@@ -8,32 +8,58 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, Calendar, Share2, ArrowLeft, Play } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+function extractYouTubeId(url) {
+  const match = url?.match(/youtube\.com\/embed\/([^?&]+)/);
+  return match ? match[1] : null;
+}
+
 export default function PodcastDetail() {
   const { id } = useParams();
   const [location] = useLocation();
   const { data: podcast, isLoading, error } = useEpisode(Number(id));
   const videoRef = useRef(null);
+  const ytPlayer = useRef(null);
   const { toast } = useToast();
+
+  const isYouTube = !!extractYouTubeId(podcast?.videoUrl);
+
+  // Load YouTube IFrame API when this is a YouTube embed
+  useEffect(() => {
+    if (!isYouTube || !podcast?.videoUrl) return;
+    const videoId = extractYouTubeId(podcast.videoUrl);
+
+    const initPlayer = () => {
+      ytPlayer.current = new window.YT.Player("yt-player", {
+        videoId,
+        playerVars: { autoplay: 0, controls: 1 },
+      });
+    };
+
+    if (window.YT?.Player) {
+      // API already loaded (e.g. navigated back to this page)
+      initPlayer();
+    } else {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+      window.onYouTubeIframeAPIReady = initPlayer;
+    }
+
+    return () => {
+      ytPlayer.current = null;
+    };
+  }, [isYouTube, podcast?.videoUrl]);
 
   // Seek to timestamp from URL query param e.g. ?t=01:30
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const timestamp = params.get("t");
-    if (timestamp && videoRef.current) {
-      const parts = timestamp.split(":").map(Number);
-      let totalSeconds = 0;
-      if (parts.length === 2) {
-        totalSeconds = parts[0] * 60 + parts[1];
-      } else if (parts.length === 3) {
-        totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-      }
-      if (!isNaN(totalSeconds)) {
-        videoRef.current.currentTime = totalSeconds;
-        videoRef.current.play().catch(() => {
-          // Auto-play may be blocked — user can press play manually
-        });
-      }
-    }
+    if (!timestamp) return;
+    const parts = timestamp.split(":").map(Number);
+    let totalSeconds = 0;
+    if (parts.length === 2) totalSeconds = parts[0] * 60 + parts[1];
+    else if (parts.length === 3) totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (!isNaN(totalSeconds)) seekTo(timestamp);
   }, [location, isLoading]);
 
   // Web Share API with clipboard fallback
@@ -53,13 +79,18 @@ export default function PodcastDetail() {
   };
 
   const seekTo = (time) => {
-    if (!videoRef.current) return;
     const parts = time.split(":").map(Number);
-    let seconds = 0;
-    if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
-    else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-    videoRef.current.currentTime = seconds;
-    videoRef.current.play().catch(() => {});
+    const seconds = parts.length === 3
+      ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+      : parts[0] * 60 + parts[1];
+
+    if (ytPlayer.current?.seekTo) {
+      ytPlayer.current.seekTo(seconds, true);
+      ytPlayer.current.playVideo();
+    } else if (videoRef.current) {
+      videoRef.current.currentTime = seconds;
+      videoRef.current.play().catch(() => {});
+    }
   };
 
   if (isLoading) {
@@ -99,15 +130,19 @@ export default function PodcastDetail() {
           {/* Main: Video & details */}
           <div className="lg:col-span-2 space-y-8">
             <div className="relative rounded-2xl overflow-hidden shadow-2xl bg-black aspect-video">
-              <video
-                ref={videoRef}
-                src={podcast.videoUrl}
-                poster={podcast.thumbnailUrl}
-                controls
-                className="w-full h-full object-contain"
-              >
-                Your browser does not support the video tag.
-              </video>
+              {isYouTube ? (
+                <div id="yt-player" className="w-full h-full" />
+              ) : (
+                <video
+                  ref={videoRef}
+                  src={podcast.videoUrl}
+                  poster={podcast.thumbnailUrl}
+                  controls
+                  className="w-full h-full object-contain"
+                >
+                  Your browser does not support the video tag.
+                </video>
+              )}
             </div>
 
             <div>
@@ -145,7 +180,7 @@ export default function PodcastDetail() {
           <div className="space-y-6">
             <Card className="p-6 sticky top-24">
               <h3 className="font-display font-bold text-xl mb-4">Key Moments</h3>
-              <div className="space-y-4">
+              <div className="space-y-4" style={{ overflowY: "auto", maxHeight: "60vh", scrollbarWidth: "thin", scrollbarColor: "#d1d5db transparent", overscrollBehavior: "contain" }}>
                 {podcast.transcripts && podcast.transcripts.length > 0 ? (
                   podcast.transcripts.map((item, idx) => (
                     <div
@@ -173,13 +208,21 @@ export default function PodcastDetail() {
             </Card>
 
             <Card className="p-6 bg-primary/5 border-primary/10">
-              <h3 className="font-display font-bold text-lg mb-2">About the Show</h3>
+              <h3 className="font-display font-bold text-lg mb-1">MAKEIT OR BREAKIT</h3>
+              <p className="text-xs font-medium text-primary mb-3 uppercase tracking-wide">by MAKEIT.TECH</p>
               <p className="text-sm text-muted-foreground mb-4">
-                MAKEIT.TECH explores the frontier of technology, design, and innovation. Join us as we interview the builders shaping the future.
+                Raw conversations with founders, engineers, and makers — the people who build things that matter. Every episode explores what it really takes to make it or break it in tech, hardware, and product.
               </p>
-              <Link href="/subscribe">
-                <Button className="w-full">Subscribe Now</Button>
-              </Link>
+              <div className="space-y-2">
+                <Link href="/subscribe">
+                  <Button className="w-full">Subscribe &amp; Never Miss an Episode</Button>
+                </Link>
+                <Link href="/contact">
+                  <Button variant="outline" className="w-full text-sm">
+                    Want to be a guest? Get in touch →
+                  </Button>
+                </Link>
+              </div>
             </Card>
           </div>
         </div>

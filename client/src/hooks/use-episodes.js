@@ -66,6 +66,24 @@ export function useCreateEpisode() {
   });
 }
 
+// POST /api/episodes/extract — YouTube auto-extraction (backoffice)
+export function useExtractYouTube() {
+  return useMutation({
+    mutationFn: async ({ youtubeUrl, title, transcriptSource, transcriptText, analysisMode }) => {
+      const res = await fetch(`${API_BASE}/api/episodes/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeUrl, title, transcriptSource, transcriptText, analysisMode }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Extraction failed" }));
+        throw new Error(err.message);
+      }
+      return res.json();
+    },
+  });
+}
+
 // DELETE /api/podcasts/:id — delete episode (backoffice)
 export function useDeleteEpisode() {
   const qc = useQueryClient();
