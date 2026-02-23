@@ -1,82 +1,171 @@
-# MAKEIT.TECH — Media Navigator
+# 🎙️ MAKEIT.TECH — Media Navigator
 
-A professional podcast and videocast platform built with React, Express, and PostgreSQL.
-Featuring **PCB (Podcast Content Browser)** — an AI-powered tool that finds the exact moment you're looking for inside any episode.
+> A professional podcast and videocast platform with **PCB (Podcast Content Browser)** — an AI-powered tool built on Anthropic Claude that finds the exact moment you're looking for inside any episode.
 
----
+![Status](https://img.shields.io/badge/Status-Production-green)
+![Node](https://img.shields.io/badge/Node.js-20+-blue)
+![React](https://img.shields.io/badge/React-18-61DAFB)
+![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6-orange)
+![Express](https://img.shields.io/badge/Express-5-black)
+![Netlify](https://img.shields.io/badge/Frontend-Netlify-00C7B7)
+![Render](https://img.shields.io/badge/Backend-Render-46E3B7)
+![Neon](https://img.shields.io/badge/Database-Neon-00E5C0)
 
-## Table of Contents
+## 📖 Overview
 
-1. [Project Overview](#project-overview)
-2. [Folder Structure](#folder-structure)
-3. [Local Development](#local-development)
-4. [Adding Episodes (via Backoffice)](#adding-episodes-via-backoffice)
-5. [Adding Episodes (directly to the database)](#adding-episodes-directly-to-the-database)
-6. [Categories](#categories)
-7. [PCB — How the AI Works](#pcb--how-the-ai-works)
-8. [Deployment: GitHub + Netlify + Railway](#deployment-github--netlify--railway)
-9. [Environment Variables](#environment-variables)
-10. [Backoffice Admin](#backoffice-admin)
+**Media Navigator** is the digital home for MAKEIT.TECH Podcasts & Videocasts — a platform built for builders, engineers, and founders.
 
----
+At its core is **PCB (Podcast Content Browser)** — a dual meaning: *Printed Circuit Board* (the company's hardware roots) and *Podcast Content Browser* (the AI feature). PCB uses **Anthropic Claude Sonnet 4.6** to analyse episode transcripts and jump you directly to the exact timestamp you're looking for.
 
-## Project Overview
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18, JavaScript/JSX, Wouter, TanStack Query, Tailwind CSS, Shadcn/ui, Framer Motion |
-| Backend | Express 5, TypeScript, Drizzle ORM |
-| Database | PostgreSQL |
-| AI | OpenAI GPT-4o (PCB feature) |
-| Build | Vite (client) + esbuild (server) |
+The platform includes:
+- **PCB AI Search** — natural language search across all episodes with timestamp precision
+- **Episode Grid** with category filters and real-time client-side search
+- **Video Player** with key moments sidebar and share functionality
+- **Password-protected Backoffice** — add and delete episodes without touching code
+- **Category System** — 7 predefined categories for episode organisation
+- **Full Deployment Pipeline** — GitHub → Render (backend) + Netlify (frontend) + Neon (DB)
 
 ---
 
-## Folder Structure
+## 🏗️ System Architecture
+
+### Core Components
+
+1. **React Frontend (Netlify)**
+   - JavaScript/JSX — no TypeScript on the client
+   - Wouter for routing, TanStack Query for data fetching
+   - Shadcn/ui + Tailwind CSS + Framer Motion for UI
+   - `VITE_API_URL` env var switches between local proxy and production API
+
+2. **Express Backend (Render)**
+   - TypeScript, Express 5, Drizzle ORM
+   - CORS middleware for cross-origin requests from Netlify
+   - PCB endpoint calls Anthropic Claude with all episode context
+   - Seed data auto-inserted on first boot if DB is empty
+
+3. **PostgreSQL Database (Neon)**
+   - Serverless Postgres — free tier, always-on
+   - Single `podcasts` table with JSONB `transcripts` column
+   - Schema managed with Drizzle Kit (`npm run db:push`)
+
+4. **PCB AI Engine**
+   - `POST /api/ai/search` receives user query
+   - Fetches all episodes + transcripts from DB
+   - Sends context + query to Claude Sonnet 4.6
+   - Returns `{ podcastId, timestamp, explanation }`
+
+### Request Flow
+
+```
+┌─────────────────────────┐
+│   Netlify (Frontend)    │
+│  React 18 + Vite        │
+│  VITE_API_URL → Render  │
+└──────────┬──────────────┘
+           │  HTTPS (CORS-enabled)
+           ▼
+┌─────────────────────────┐
+│   Render (Backend)      │
+│  Express 5 + TypeScript │◄──── env: DATABASE_URL
+│  Port 5000              │◄──── env: ANTHROPIC_API_KEY
+└──────────┬──────────────┘
+           │
+     ┌─────┴──────┐
+     │            │
+     ▼            ▼
+┌─────────┐  ┌──────────────────┐
+│  Neon   │  │  Anthropic API   │
+│Postgres │  │  Claude Sonnet   │
+│  (DB)   │  │  4.6             │
+└─────────┘  └──────────────────┘
+```
+
+### PCB Search Flow
+
+```
+┌──────────────────────────┐
+│  User types query        │
+│  in PCB search bar       │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│  POST /api/ai/search     │
+│  { query: "..." }        │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│  Fetch ALL episodes      │
+│  + transcripts from DB   │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│  Claude Sonnet 4.6       │
+│  analyses context        │
+│  → returns JSON          │
+│  { podcastId,            │
+│    timestamp,            │
+│    explanation }         │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│  Frontend navigates to   │
+│  /podcasts/:id           │
+│  at exact timestamp      │
+└──────────────────────────┘
+```
+
+---
+
+## 📂 Project Structure
 
 ```
 Media-Navigator/
-├── client/                     # React frontend (JavaScript/JSX)
+├── client/                      # React frontend (JavaScript/JSX)
 │   ├── index.html
 │   ├── public/
 │   └── src/
 │       ├── components/
-│       │   ├── backoffice/     # Admin-only components
-│       │   │   ├── BackofficeContext.jsx
-│       │   │   └── AddEpisodeModal.jsx
-│       │   ├── ui/             # Shadcn/ui primitives (do not edit)
-│       │   ├── EpisodeCard.jsx
-│       │   └── Layout.jsx
+│       │   ├── backoffice/      # Admin-only components
+│       │   │   ├── BackofficeContext.jsx   # Auth context + password modal
+│       │   │   └── AddEpisodeModal.jsx     # Add episode form
+│       │   ├── ui/              # Shadcn/ui primitives (do not edit)
+│       │   ├── EpisodeCard.jsx  # Card with category badge + delete button
+│       │   └── Layout.jsx       # Nav + footer + admin toggle
 │       ├── hooks/
-│       │   ├── use-episodes.js  # All episode + PCB API hooks
-│       │   ├── use-toast.ts
-│       │   └── use-mobile.tsx
+│       │   ├── use-episodes.js  # All API hooks (episodes + PCB search)
+│       │   ├── use-toast.ts     # Shadcn/ui toast (kept as TS)
+│       │   └── use-mobile.tsx   # Shadcn/ui mobile hook (kept as TS)
 │       ├── lib/
-│       │   ├── queryClient.js
-│       │   └── utils.js
+│       │   ├── queryClient.js   # TanStack Query client
+│       │   └── utils.js         # cn() utility
 │       └── pages/
-│           ├── Home.jsx         # Landing page + PCB search
-│           ├── Episodes.jsx     # Full episode grid with filters
-│           ├── PodcastDetail.jsx# Video player + key moments
+│           ├── Home.jsx          # Landing page + PCB search hero
+│           ├── Episodes.jsx      # Full episode grid + category filters
+│           ├── PodcastDetail.jsx # Video player + key moments sidebar
 │           ├── About.jsx
 │           ├── Subscribe.jsx
-│           ├── ComingSoon.jsx   # Placeholder for future pages
+│           ├── ComingSoon.jsx    # Placeholder for future pages
 │           └── NotFound.jsx
-├── server/                     # Express backend (TypeScript)
-│   ├── index.ts
-│   ├── routes.ts               # All API endpoints
-│   ├── storage.ts              # Database access layer
-│   ├── db.ts                   # Drizzle database connection
-│   ├── static.ts
-│   └── vite.ts
-├── shared/                     # Shared types (TypeScript)
-│   ├── schema.ts               # Drizzle schema + EPISODE_CATEGORIES
-│   └── routes.ts               # Typed API route definitions
+├── server/                      # Express backend (TypeScript)
+│   ├── index.ts                 # Entry point + CORS middleware
+│   ├── routes.ts                # All API endpoints + PCB + seed data
+│   ├── storage.ts               # Database access layer (Drizzle)
+│   ├── db.ts                    # Drizzle + pg connection
+│   ├── static.ts                # Serves dist/public in production
+│   └── vite.ts                  # Vite dev middleware (development only)
+├── shared/                      # Shared types — TypeScript
+│   ├── schema.ts                # Drizzle schema + EPISODE_CATEGORIES
+│   └── routes.ts                # Typed API route + Zod schemas
 ├── script/
-│   └── build.ts                # Production build script
-├── .env.example                # Environment variable reference
-├── netlify.toml                # Netlify build configuration
-├── vite.config.ts
+│   └── build.ts                 # esbuild + vite production build
+├── .env                         # Local secrets (gitignored)
+├── .env.example                 # Environment variable reference
+├── netlify.toml                 # Netlify: build command + SPA redirect
+├── vite.config.ts               # Vite: root, alias, dev proxy → :5000
 ├── tailwind.config.ts
 ├── drizzle.config.ts
 └── package.json
@@ -84,199 +173,323 @@ Media-Navigator/
 
 ---
 
-## Local Development
+## 🚀 Local Development
 
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL database (local or cloud — e.g. Neon, Supabase, Railway)
-- OpenAI API key (for PCB feature)
+- A PostgreSQL database — [Neon](https://neon.tech) is recommended (free, no local install)
+- An Anthropic API key — get one at [console.anthropic.com](https://console.anthropic.com)
 
 ### Setup
 
 ```bash
-# 1. Install dependencies
+# 1. Clone the repository
+git clone https://github.com/your-username/media-navigator.git
+cd media-navigator
+
+# 2. Install dependencies
 npm install
 
-# 2. Copy environment variables and fill in your values
+# 3. Configure environment
 cp .env.example .env
+# Edit .env — fill in DATABASE_URL and ANTHROPIC_API_KEY
 
-# 3. Push the database schema
+# 4. Push database schema (creates the podcasts table)
 npm run db:push
 
-# 4. Start the full dev server (Express + Vite together)
+# 5. Start the full dev server (Express + Vite together)
 npm run dev
 ```
 
-The app runs at `http://localhost:5000` in development.
-Vite proxies all `/api/*` requests to Express automatically.
+The app runs at **http://localhost:5000**
 
-> **Tip:** To run just the frontend (pointing at a remote API), use `npm run dev:client` and set `VITE_API_URL` in your `.env`.
+Vite proxies all `/api/*` requests to the Express server automatically — no CORS issues in development.
+
+### Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Express + Vite dev server together (port 5000) |
+| `npm run dev:client` | Start Vite only, pointing at `VITE_API_URL` |
+| `npm run build` | Production build — Vite (client) + esbuild (server) |
+| `npm run build:client` | Build frontend only (used by Netlify) |
+| `npm run start` | Start production server (`dist/index.cjs`) |
+| `npm run db:push` | Push Drizzle schema to database |
+| `npm run check` | TypeScript type check |
 
 ---
 
-## Adding Episodes (via Backoffice)
+## 🎛️ Backoffice Admin
 
-The easiest way to add episodes is through the built-in **Backoffice**:
+The backoffice is a hidden admin mode that lets you manage episodes without touching the database directly.
 
-1. Open the app in your browser.
-2. Scroll to the footer — click the small **🔒 Admin** link.
-3. Enter the admin password (see [Backoffice Admin](#backoffice-admin)).
-4. A red **BACKOFFICE MODE ACTIVE** banner appears.
-5. On the Home or Episodes page, click **+ Add Episode**.
-6. Fill in the form:
+| Action | Detail |
+|--------|--------|
+| **Open** | Click **🔒 Admin** in the footer (far right) |
+| **Password** | `MIcompany2020` |
+| **Session** | Stored in `sessionStorage` — clears on tab close |
+| **Exit** | Click **🔓 Exit Admin** in the footer |
+
+**In admin mode:**
+- A red banner appears at the top of every page
+- **+ Add Episode** button appears on Home and Episodes pages
+- A **Delete** button appears on each episode card (asks for confirmation)
+
+---
+
+## ➕ Adding Episodes
+
+### Option 1 — Via Backoffice (recommended)
+
+1. Open the app → footer → **🔒 Admin** → enter password
+2. Click **+ Add Episode**
+3. Fill in the form:
    - **Title** — episode title
-   - **Description** — short summary
-   - **Video URL** — direct link to the `.mp4` / stream URL
-   - **Thumbnail URL** — image shown on the card (16:9 recommended)
-   - **Category** — choose from the dropdown
-   - **Key Moments (optional)** — add rows of `Time / Topic / Text` for the sidebar timestamps
-7. Click **Add Episode** — the episode appears immediately.
+   - **Description** — short summary (used by PCB as fallback)
+   - **Video URL** — direct `.mp4` link or stream URL
+   - **Thumbnail URL** — card image (16:9 recommended)
+   - **Category** — see [Categories](#-categories) below
+   - **Key Moments** — rows of `Time / Topic / Text` (critical for PCB accuracy)
+4. Click **Add Episode** — appears immediately
 
----
+### Option 2 — Via Neon SQL Editor
 
-## Adding Episodes (directly to the database)
-
-You can also `INSERT` rows directly via SQL or Drizzle:
+Open the Neon dashboard → SQL Editor and run:
 
 ```sql
 INSERT INTO podcasts (title, description, video_url, thumbnail_url, category, transcripts)
 VALUES (
-  'My Episode Title',
-  'A short description of this episode.',
-  'https://your-cdn.com/episode1.mp4',
-  'https://your-cdn.com/thumb1.jpg',
+  'Episode Title',
+  'Short episode description.',
+  'https://your-cdn.com/episode.mp4',
+  'https://your-cdn.com/thumbnail.jpg',
   'Technology',
-  '[{"time":"02:30","topic":"Opening","text":"Introduction to the topic."},
-    {"time":"10:15","topic":"Deep Dive","text":"We explore the core concepts."}]'
+  '[
+    {"time":"00:00","topic":"Introduction","text":"Welcome and overview of the episode."},
+    {"time":"05:30","topic":"Main Topic","text":"We dive into the core subject matter."},
+    {"time":"18:45","topic":"Key Insight","text":"The most important takeaway from this discussion."}
+  ]'
 );
 ```
 
-The `transcripts` column is JSONB.  Each item must have:
-- `time` — `"MM:SS"` or `"HH:MM:SS"` format
-- `topic` — short label shown in the sidebar
-- `text` — one or two sentences shown as preview text
+**Transcript format (JSONB):**
+| Field | Format | Description |
+|-------|--------|-------------|
+| `time` | `"MM:SS"` or `"HH:MM:SS"` | Timestamp for this moment |
+| `topic` | Short string | Label shown in the sidebar |
+| `text` | 1–2 sentences | Context shown as preview — used by PCB |
 
 ---
 
-## Categories
+## 🏷️ Categories
 
-Available categories (defined in `shared/schema.ts`):
+Defined in `shared/schema.ts` as `EPISODE_CATEGORIES`:
 
 | Category | Use for |
 |----------|---------|
-| Technology | General tech topics |
-| Hardware & PCB | Electronics, circuit boards |
-| Design | UX, product, visual design |
-| Business | Entrepreneurship, strategy |
-| AI & Software | Machine learning, software engineering |
-| Innovation | New ideas, future of tech |
-| Other | Anything that doesn't fit |
+| `Technology` | General tech topics |
+| `Hardware & PCB` | Electronics, circuit boards, embedded systems |
+| `Design` | UX, product design, visual design |
+| `Business` | Entrepreneurship, strategy, growth |
+| `AI & Software` | Machine learning, software engineering |
+| `Innovation` | New ideas, future of tech |
+| `Other` | Anything that doesn't fit |
 
 ---
 
-## PCB — How the AI Works
+## 🤖 PCB — How the AI Works
 
-**PCB** stands for *Printed Circuit Board* (the company's hardware roots) and *Podcast Content Browser*.
+**PCB** = *Printed Circuit Board* (MAKEIT.TECH's hardware roots) + *Podcast Content Browser*
 
-When a user types a question or keyword into the PCB search bar, the following happens:
+### Endpoint
 
-1. The query is sent to `POST /api/ai/search` on the backend.
-2. The server fetches all episodes (titles, descriptions, transcripts) from the database.
-3. OpenAI GPT-4o analyses the content and returns the best matching episode + timestamp.
-4. The frontend links the user directly to that episode at the exact moment.
+```
+POST /api/ai/search
+Body: { "query": "how to build an MVP fast" }
+Response: { "podcastId": 1, "timestamp": "05:30", "explanation": "..." }
+```
 
-**To make PCB accurate:**
-- Add detailed **Key Moments** (transcripts) to each episode — the more, the better.
-- Each key moment should describe what is discussed at that timestamp in plain language.
-- The AI uses these as its primary source; the description is used as fallback.
+### How to maximise accuracy
 
-**Environment variable required:** `OPENAI_API_KEY` in your `.env`.
+The quality of PCB results depends entirely on the **Key Moments** (transcripts) you add to each episode:
+
+- Add **at least 5–10 key moments** per episode
+- Write `text` in plain, searchable language — describe what is *discussed*, not just the topic name
+- Cover the full timeline of the episode (beginning, middle, end)
+- Be specific: `"We discuss the exact tools and frameworks used to build the MVP in 2024"` beats `"Tools"`
+
+**Environment variable required:**
+- Local: `ANTHROPIC_API_KEY` in `.env`
+- Production: `ANTHROPIC_API_KEY` in Render environment variables
 
 ---
 
-## Deployment: GitHub + Netlify + Railway
+## ☁️ Deployment: GitHub + Netlify + Render + Neon
 
-Because the app has a backend (Express + PostgreSQL), you need **two** hosting services:
+All four services have **free tiers** — no credit card required for basic use.
 
-| Service | Hosts |
-|---------|-------|
-| **Netlify** | React frontend (static) |
-| **Railway** (or Render) | Express server + PostgreSQL |
+| Service | Role | Free? |
+|---------|------|-------|
+| **GitHub** | Source code + auto-deploys trigger | Yes |
+| **Neon** | Serverless PostgreSQL database | Yes — permanent free tier |
+| **Render** | Express API server | Yes — sleeps after 15 min inactivity |
+| **Netlify** | React frontend (static hosting) | Yes — unlimited deploys |
 
-### Step 1 — Push to GitHub
+---
+
+### Step 1 — Neon (database)
+
+1. Go to [neon.tech](https://neon.tech) → Create account → **New Project**
+2. Choose a region close to your audience
+3. Copy the **Connection string** (format: `postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require`)
+4. Add it to your local `.env` as `DATABASE_URL`
+5. Run schema migration once from your local terminal:
+   ```bash
+   npm run db:push
+   ```
+
+---
+
+### Step 2 — Render (backend)
+
+1. Go to [render.com](https://render.com) → **New** → **Web Service** → connect GitHub → select repo
+2. Configure:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Build command** | `npm install --include=dev && npm run build` |
+   | **Start command** | `npm run start` |
+   | **Node version** | `20` |
+
+3. Add **Environment Variables**:
+
+   | Key | Value |
+   |-----|-------|
+   | `DATABASE_URL` | Your Neon connection string |
+   | `ANTHROPIC_API_KEY` | Your Anthropic API key |
+   | `NODE_ENV` | `production` |
+
+4. Deploy — note your Render URL (e.g. `https://media-navigator.onrender.com`)
+
+> ⚠️ **Important:** The build command must use `--include=dev` because `tsx`, `vite`, and `esbuild` are devDependencies needed during the build phase.
+
+> 💤 **Free tier note:** The server sleeps after 15 minutes of inactivity. The first request after sleeping takes ~30 seconds.
+
+---
+
+### Step 3 — Netlify (frontend)
+
+1. Go to [netlify.com](https://netlify.com) → **Add new site** → **Import from GitHub** → select repo
+2. Netlify reads `netlify.toml` automatically — no build settings needed
+3. Add **Environment Variable**:
+
+   | Key | Value |
+   |-----|-------|
+   | `VITE_API_URL` | Your Render URL (e.g. `https://media-navigator.onrender.com`) |
+
+4. Click **Deploy site**
+
+---
+
+### Updating the app
+
+Every `git push` to `main` triggers automatic redeployment on both Render and Netlify:
 
 ```bash
-git init          # if not already a git repo
 git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/your-username/media-navigator.git
-git push -u origin main
+git commit -m "Your change description"
+git push
 ```
-
-### Step 2 — Deploy backend on Railway
-
-1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub.
-2. Select your repository.
-3. Add a PostgreSQL plugin inside Railway.
-4. Set environment variables in Railway:
-   - `DATABASE_URL` (Railway provides this automatically from the plugin)
-   - `OPENAI_API_KEY`
-   - `NODE_ENV=production`
-5. Set the start command: `npm run start`
-6. Note the public Railway URL (e.g. `https://media-navigator.up.railway.app`).
-
-> **First deploy:** Railway will run `npm run build` (which builds both client and server via `script/build.ts`). If you only want the server built on Railway, set the build command to `tsx script/build.ts` explicitly.
-
-### Step 3 — Deploy frontend on Netlify
-
-1. Go to [netlify.com](https://netlify.com) → Add new site → Import from GitHub.
-2. Select your repository.
-3. Netlify reads `netlify.toml` automatically:
-   - Build command: `npm run build:client`
-   - Publish directory: `dist/public`
-4. Add environment variable in Netlify dashboard:
-   - `VITE_API_URL` = your Railway URL (e.g. `https://media-navigator.up.railway.app`)
-5. Deploy!
-
-### Step 4 — Run DB migration on Railway
-
-After the first Railway deploy, open the Railway shell and run:
-
-```bash
-npm run db:push
-```
-
-This creates the `podcasts` table in your Railway PostgreSQL database.
 
 ---
 
-## Environment Variables
+## 🔑 Environment Variables
 
-Copy `.env.example` to `.env` and fill in your values.
+| Variable | Where | Required | Description |
+|----------|-------|----------|-------------|
+| `DATABASE_URL` | `.env` + Render | Yes | Neon PostgreSQL connection string |
+| `ANTHROPIC_API_KEY` | `.env` + Render | Yes | Anthropic API key for PCB feature |
+| `PORT` | `.env` only | No | Server port (default: `5000`) |
+| `VITE_API_URL` | Netlify dashboard | Production only | Full Render backend URL |
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `OPENAI_API_KEY` | Yes | OpenAI API key for PCB feature |
-| `PORT` | No | Server port (default: 5000) |
-| `VITE_API_URL` | Production only | Full URL of the backend API (e.g. `https://api.myapp.up.railway.app`) |
+> `.env` is gitignored and never committed. Use `.env.example` as reference.
 
 ---
 
-## Backoffice Admin
+## 🛠️ Technical Stack
 
-The backoffice is accessed from a small link in the footer (far right).
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| **Frontend** | React | 18 | UI framework |
+| **Language** | JavaScript/JSX | ES2022 | Client-side (no TypeScript) |
+| **Routing** | Wouter | ^3.3 | Lightweight SPA router |
+| **Data Fetching** | TanStack Query | ^5.60 | Server state + caching |
+| **UI Components** | Shadcn/ui | Latest | Accessible component library |
+| **Styling** | Tailwind CSS | ^3.4 | Utility-first CSS |
+| **Animation** | Framer Motion | ^11 | Page and component animations |
+| **Backend** | Express | 5 | API server |
+| **Backend Language** | TypeScript | 5.6 | Server-side type safety |
+| **ORM** | Drizzle ORM | ^0.39 | Type-safe database queries |
+| **Database** | PostgreSQL | via Neon | Relational data storage |
+| **AI** | Anthropic Claude | Sonnet 4.6 | PCB podcast search |
+| **Build — Client** | Vite | ^7.3 | Frontend bundler |
+| **Build — Server** | esbuild | ^0.25 | Server bundler (CJS output) |
+| **Hosting — Frontend** | Netlify | — | Static site hosting |
+| **Hosting — Backend** | Render | — | Node.js web service |
+| **Database Host** | Neon | — | Serverless PostgreSQL |
 
-| Action | Detail |
-|--------|--------|
-| **Open** | Click **🔒 Admin** in the footer |
-| **Password** | `MIcompany2020` |
-| **Session** | Stored in `sessionStorage` — clears on tab close |
-| **Exit** | Click **🔓 Exit Admin** in the footer (or close the tab) |
+---
 
-In admin mode:
-- A red banner appears at the top of every page.
-- **+ Add Episode** button appears on the Home and Episodes pages.
-- A **Delete** button appears on each episode card.
-- Deleting asks for confirmation before removing the episode from the database.
+## 📡 API Reference
+
+### Episodes
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/podcasts` | List all episodes |
+| `GET` | `/api/podcasts/:id` | Get single episode |
+| `POST` | `/api/podcasts` | Create episode (backoffice) |
+| `DELETE` | `/api/podcasts/:id` | Delete episode (backoffice) |
+
+### PCB AI Search
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/ai/search` | Search episodes with Claude |
+
+**PCB Request:**
+```json
+{ "query": "how to build an MVP fast" }
+```
+
+**PCB Response:**
+```json
+{
+  "podcastId": 1,
+  "timestamp": "05:30",
+  "explanation": "At 5:30, the hosts discuss rapid MVP building techniques using lean startup principles."
+}
+```
+
+---
+
+## 👨‍💻 Author
+
+**Bruno Sousa** — MAKEIT.TECH
+
+---
+
+## 🙏 Acknowledgments
+
+- **Anthropic** for Claude Sonnet 4.6
+- **Neon** for serverless PostgreSQL
+- **Shadcn/ui** for the component library
+- **Drizzle ORM** for type-safe database access
+- **Render & Netlify** for free-tier hosting
+
+---
+
+**Version**: 1.0.0
+**Status**: Production
+**Last Updated**: 2026-02-23
