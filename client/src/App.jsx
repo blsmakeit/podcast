@@ -10,6 +10,7 @@ import Episodes from "@/pages/Episodes";
 import PodcastDetail from "@/pages/PodcastDetail";
 import About from "@/pages/About";
 import Subscribe from "@/pages/Subscribe";
+import Contact from "@/pages/Contact";
 import ComingSoon from "@/pages/ComingSoon";
 import NotFound from "@/pages/NotFound";
 
@@ -24,7 +25,7 @@ function Router() {
       <Route path="/series" component={ComingSoon} />
       <Route path="/hosts" component={ComingSoon} />
       <Route path="/careers" component={ComingSoon} />
-      <Route path="/contact" component={ComingSoon} />
+      <Route path="/contact" component={Contact} />
       <Route path="/privacy" component={ComingSoon} />
       <Route path="/terms" component={ComingSoon} />
       <Route component={NotFound} />

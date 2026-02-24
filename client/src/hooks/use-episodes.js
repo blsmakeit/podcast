@@ -165,6 +165,36 @@ export function useFeaturedQuestions() {
   });
 }
 
+// POST /api/subscribe — save subscriber email
+export function useSubscribe() {
+  return useMutation({
+    mutationFn: async (email) => {
+      const res = await fetch(`${API_BASE}/api/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error("Failed to subscribe");
+      return res.json();
+    },
+  });
+}
+
+// POST /api/contact — contact form
+export function useContact() {
+  return useMutation({
+    mutationFn: async (formData) => {
+      const res = await fetch(`${API_BASE}/api/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      return res.json();
+    },
+  });
+}
+
 // DELETE /api/podcasts/:id — delete episode (backoffice)
 export function useDeleteEpisode() {
   const qc = useQueryClient();

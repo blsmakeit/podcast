@@ -3,8 +3,10 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Bell, CheckCircle, Podcast } from "lucide-react";
+import { Bell, CheckCircle, Loader2, Podcast } from "lucide-react";
 import { motion } from "framer-motion";
+import { useSubscribe } from "@/hooks/use-episodes";
+import { useToast } from "@/hooks/use-toast";
 
 const benefits = [
   "New episode notifications delivered to your inbox",
@@ -15,13 +17,21 @@ const benefits = [
 
 export default function Subscribe() {
   const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const { mutate: subscribe, isPending, isSuccess } = useSubscribe();
+  const { toast } = useToast();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!email.trim()) return;
-    // Placeholder — no backend email service yet
-    setSubmitted(true);
+    subscribe(email, {
+      onSuccess: () => {
+        setEmail("");
+        toast({ title: "Subscribed!", description: "Thank you for subscribing." });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Failed to subscribe. Please try again.", variant: "destructive" });
+      },
+    });
   };
 
   return (
@@ -42,7 +52,7 @@ export default function Subscribe() {
               Subscribe to MAKEIT.TECH Podcasts and get notified whenever a new episode drops.
             </p>
 
-            {submitted ? (
+            {isSuccess ? (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                 <Card className="p-8 border-primary/20 bg-primary/5 text-center">
                   <CheckCircle className="w-12 h-12 text-primary mx-auto mb-4" />
@@ -60,10 +70,11 @@ export default function Subscribe() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isPending}
                   className="h-12 text-base"
                 />
-                <Button type="submit" size="lg" className="font-semibold shadow-lg shadow-primary/20 shrink-0">
-                  Subscribe Free
+                <Button type="submit" size="lg" disabled={isPending} className="font-semibold shadow-lg shadow-primary/20 shrink-0">
+                  {isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Subscribing…</> : "Subscribe Free"}
                 </Button>
               </form>
             )}

@@ -147,6 +147,49 @@ export default function Home() {
               </form>
             </div>
 
+            {/* PCB Result Card */}
+            <AnimatePresence>
+              {pcbResult && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="max-w-2xl mx-auto"
+                >
+                  <Card className="text-left p-6 border-primary/20 bg-primary/5 relative overflow-hidden">
+                    <button
+                      onClick={reset}
+                      className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Close result"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="flex flex-col sm:flex-row gap-6 items-start">
+                      <div className="flex-1">
+                        <h3 className="font-display font-bold text-lg mb-2 flex items-center gap-2">
+                          <PCBIcon className="w-4 h-4 text-primary" />
+                          PCB Found a Match
+                        </h3>
+                        <p className="text-muted-foreground mb-4">"{pcbResult.explanation}"</p>
+                        {pcbResult.timestamp && (
+                          <div className="inline-flex items-center gap-2 text-sm font-medium bg-background/50 px-3 py-1 rounded-md border border-border/50">
+                            <ClockIcon className="w-4 h-4 text-primary" />
+                            Timestamp: <span className="font-mono text-primary">{pcbResult.timestamp}</span>
+                          </div>
+                        )}
+                      </div>
+                      {pcbResult.podcastId && (
+                        <Button onClick={handlePlayResult} className="shrink-0 w-full sm:w-auto mt-2 sm:mt-0 gap-2 shadow-lg">
+                          <Play className="w-4 h-4 fill-current" />
+                          Play Segment
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Admin visibility panel */}
             {isAdmin && (
               <div className="w-full max-w-5xl mx-auto mb-4 p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-6">
@@ -274,48 +317,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* PCB Result Card */}
-            <AnimatePresence>
-              {pcbResult && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="max-w-2xl mx-auto"
-                >
-                  <Card className="text-left p-6 border-primary/20 bg-primary/5 relative overflow-hidden">
-                    <button
-                      onClick={reset}
-                      className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="Close result"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                    <div className="flex flex-col sm:flex-row gap-6 items-start">
-                      <div className="flex-1">
-                        <h3 className="font-display font-bold text-lg mb-2 flex items-center gap-2">
-                          <PCBIcon className="w-4 h-4 text-primary" />
-                          PCB Found a Match
-                        </h3>
-                        <p className="text-muted-foreground mb-4">"{pcbResult.explanation}"</p>
-                        {pcbResult.timestamp && (
-                          <div className="inline-flex items-center gap-2 text-sm font-medium bg-background/50 px-3 py-1 rounded-md border border-border/50">
-                            <ClockIcon className="w-4 h-4 text-primary" />
-                            Timestamp: <span className="font-mono text-primary">{pcbResult.timestamp}</span>
-                          </div>
-                        )}
-                      </div>
-                      {pcbResult.podcastId && (
-                        <Button onClick={handlePlayResult} className="shrink-0 w-full sm:w-auto mt-2 sm:mt-0 gap-2 shadow-lg">
-                          <Play className="w-4 h-4 fill-current" />
-                          Play Segment
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
         </div>
       </section>

@@ -2,10 +2,11 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPodcastSchema, generatedContent, siteSettings } from "@shared/schema";
+import { insertPodcastSchema, generatedContent, siteSettings, subscribers } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Resend } from "resend";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -13,6 +14,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function registerRoutes(
   httpServer: Server,
@@ -321,6 +323,70 @@ Return ONLY a valid JSON object with exactly these fields:
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // POST /api/subscribe — save subscriber email
+  app.post("/api/subscribe", async (req, res) => {
+    const { email } = req.body as { email?: string };
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ message: "Valid email required" });
+    }
+    try {
+      await db.insert(subscribers)
+        .values({ email: email.toLowerCase().trim() })
+        .onConflictDoNothing();
+      res.json({ success: true, message: "Subscribed successfully" });
+    } catch (err) {
+      console.error("subscribe error:", err);
+      res.status(500).json({ message: "Failed to subscribe" });
+    }
+  });
+
+  // GET /api/subscribers — list all subscriber emails (admin)
+  app.get("/api/subscribers", async (_req, res) => {
+    try {
+      const allSubscribers = await db.select().from(subscribers).orderBy(subscribers.subscribedAt);
+      res.json({ subscribers: allSubscribers, total: allSubscribers.length });
+    } catch (err) {
+      console.error("subscribers error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // POST /api/contact — contact form
+  app.post("/api/contact", async (req, res) => {
+    const { name, email, subject, message } = req.body as {
+      name?: string;
+      email?: string;
+      subject?: string;
+      message?: string;
+    };
+    if (!name?.trim() || !email?.trim() || !message?.trim()) {
+      return res.status(400).json({ message: "Name, email and message are required." });
+    }
+    if (!email.includes("@")) {
+      return res.status(400).json({ message: "Valid email required." });
+    }
+    try {
+      await resend.emails.send({
+        from: "MAKEIT OR BREAKIT <onboarding@resend.dev>",
+        to: "contact@make-it.tech",
+        replyTo: email,
+        subject: `[Contact Form] ${subject || "New message from " + name}`,
+        html: `<h2>New contact form submission</h2>
+<p><strong>Name:</strong> ${name}</p>
+<p><strong>Email:</strong> ${email}</p>
+<p><strong>Subject:</strong> ${subject || "—"}</p>
+<hr/>
+<p><strong>Message:</strong></p>
+<p>${message.replace(/\n/g, "<br/>")}</p>`,
+      });
+      console.log(`[Contact] Message from ${name} <${email}>`);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("contact error:", err);
+      res.status(500).json({ message: "Failed to send message. Please try again." });
     }
   });
 
