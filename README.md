@@ -18,6 +18,8 @@
 
 **Media Navigator** is the digital home for MAKEIT.TECH Podcasts & Videocasts — a platform built for builders, engineers, and founders.
 
+**Test App here**: https://media-navigator.onrender.com/
+
 At its core is **PCB (Podcast Content Browser)** — a dual meaning: *Printed Circuit Board* (the company's hardware roots) and *Podcast Content Browser* (the AI feature). PCB uses **Anthropic Claude Sonnet 4.6** to analyse episode transcripts and jump you directly to the exact timestamp you're looking for.
 
 The platform includes:
