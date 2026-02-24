@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPodcastSchema, generatedContent } from "@shared/schema";
+import { insertPodcastSchema, generatedContent, siteSettings } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "./db";
@@ -262,6 +262,57 @@ Return ONLY a valid JSON object with exactly these fields:
     }
   });
 
+  // GET /api/settings
+  app.get("/api/settings", async (req, res) => {
+    try {
+      const settings = await db.select().from(siteSettings);
+      const result: Record<string, unknown> = {};
+      settings.forEach(s => result[s.key] = s.value);
+      if (result.show_carousel === undefined) result.show_carousel = true;
+      if (result.show_featured_questions === undefined) result.show_featured_questions = false;
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // PUT /api/settings
+  app.put("/api/settings", async (req, res) => {
+    try {
+      const { key, value } = req.body as { key: string; value: unknown };
+      await db.insert(siteSettings)
+        .values({ key, value })
+        .onConflictDoUpdate({ target: siteSettings.key, set: { value, updatedAt: new Date() } });
+      res.json({ key, value });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // GET /api/featured-questions — AI-generated featured Q&A cards (cached 24h in DB)
+  app.get("/api/featured-questions", async (req, res) => {
+    try {
+      const forceRefresh = req.query.refresh === "true";
+
+      if (!forceRefresh) {
+        const cached = await db.select().from(generatedContent)
+          .where(eq(generatedContent.key, "featured_questions")).limit(1);
+        if (cached.length > 0) {
+          const ageHours = (Date.now() - new Date(cached[0].generatedAt as Date).getTime()) / 3600000;
+          if (ageHours < 24) return res.json({ items: cached[0].content, cached: true });
+        }
+      }
+
+      const items = await regenerateFeaturedQuestions();
+      res.json({ items, cached: false });
+    } catch (err) {
+      console.error("featured-questions error:", err);
+      res.status(500).json({ message: "Failed to generate featured questions" });
+    }
+  });
+
   await seedDatabase();
 
   return httpServer;
@@ -297,7 +348,43 @@ Format: ["Question 1?", "Question 2?", ...]`,
       set: { content: questions, generatedAt: new Date() },
     });
 
+  // Also regenerate featured Q&A cards in background
+  regenerateFeaturedQuestions().catch((e) => console.error("Featured questions regen failed:", e));
+
   return questions;
+}
+
+async function regenerateFeaturedQuestions(): Promise<Array<{ question: string; answer: string; podcastId: number; timestamp: string }>> {
+  const episodes = await storage.getPodcasts();
+  if (episodes.length === 0) return [];
+
+  const context = episodes.map(ep =>
+    `Episode ID ${ep.id} — "${ep.title}"\nTopics: ${(ep.transcripts as Array<{time: string; topic: string; text: string}>).map(t => `[${t.time}] ${t.topic}`).join(", ")}`
+  ).join("\n\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1000,
+    system: `You generate 3 featured question cards for a podcast platform called MAKEIT OR BREAKIT.
+Each card has a short punchy question (max 8 words) and a one-sentence answer that references a specific moment in an episode.
+Return ONLY a valid JSON array of exactly 3 objects.
+Format: [{ "question": "...", "answer": "...", "podcastId": <number>, "timestamp": "MM:SS" }]
+Rules: use real episode IDs and real timestamps from the context provided.`,
+    messages: [{ role: "user", content: `Episodes:\n${context}\n\nGenerate 3 featured question cards.` }],
+  });
+
+  const raw = (response.content[0] as { type: string; text: string }).text
+    .replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const items = JSON.parse(raw);
+
+  await db.insert(generatedContent)
+    .values({ key: "featured_questions", content: items })
+    .onConflictDoUpdate({
+      target: generatedContent.key,
+      set: { content: items, generatedAt: new Date() },
+    });
+
+  return items;
 }
 
 function extractVideoId(url: string): string | null {

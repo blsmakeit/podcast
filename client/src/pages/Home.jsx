@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { useEpisodes, usePCBSearch, useQuestions } from "@/hooks/use-episodes";
+import { useEpisodes, usePCBSearch, useQuestions, useSettings, useUpdateSetting, useFeaturedQuestions } from "@/hooks/use-episodes";
 import { Layout } from "@/components/Layout";
 import { EpisodeCard } from "@/components/EpisodeCard";
 import { AddEpisodeModal } from "@/components/backoffice/AddEpisodeModal";
@@ -53,6 +53,13 @@ export default function Home() {
   const [activeQ, setActiveQ] = useState(0);
   const [fading, setFading] = useState(false);
   const [paused, setPaused] = useState(false);
+
+  // Settings & featured questions
+  const { data: settingsData } = useSettings();
+  const { data: featuredData } = useFeaturedQuestions();
+  const { mutate: updateSetting } = useUpdateSetting();
+  const showCarousel = settingsData?.show_carousel ?? true;
+  const showFeatured = settingsData?.show_featured_questions ?? false;
 
   useEffect(() => {
     if (questions.length === 0 || paused) return;
@@ -140,77 +147,132 @@ export default function Home() {
               </form>
             </div>
 
+            {/* Admin visibility panel */}
+            {isAdmin && (
+              <div className="w-full max-w-5xl mx-auto mb-4 p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-6">
+                <span className="text-sm font-medium text-gray-600">Section visibility:</span>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div
+                    onClick={() => updateSetting({ key: "show_carousel", value: !showCarousel })}
+                    className={`w-10 h-6 rounded-full transition-colors ${showCarousel ? "bg-green-500" : "bg-gray-300"} relative`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${showCarousel ? "translate-x-5" : "translate-x-1"}`} />
+                  </div>
+                  <span className="text-sm text-gray-700">Questions Carousel</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div
+                    onClick={() => updateSetting({ key: "show_featured_questions", value: !showFeatured })}
+                    className={`w-10 h-6 rounded-full transition-colors ${showFeatured ? "bg-green-500" : "bg-gray-300"} relative`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${showFeatured ? "translate-x-5" : "translate-x-1"}`} />
+                  </div>
+                  <span className="text-sm text-gray-700">Featured Q&A Cards</span>
+                </label>
+
+                <span className="text-xs text-gray-400 ml-auto">Only visible to admins</span>
+              </div>
+            )}
+
             {/* Questions Carousel */}
-            <div
-              className="w-full max-w-3xl mx-auto mt-4 mb-10 rounded-2xl p-6 text-white shadow-xl"
-              style={{ background: "linear-gradient(135deg, #1a0505 0%, #0f0f0f 100%)", borderLeft: "3px solid #dc2626" }}
-              onMouseEnter={() => setPaused(true)}
-              onMouseLeave={() => setPaused(false)}
-            >
-              <p className="text-xs uppercase mb-4 text-center" style={{ color: "#dc2626", letterSpacing: "0.15em" }}>
-                Questions explored in MAKEIT OR BREAKIT
-              </p>
-              {questionsLoading ? (
-                <div className="h-16 bg-gray-700 rounded-lg animate-pulse" />
-              ) : questions.length > 0 ? (
-                <>
-                  <div className="group relative min-h-[4rem] flex items-center justify-center">
-                    <p
-                      title="Click to search this topic"
-                      className="text-xl cursor-pointer hover:underline text-center leading-snug"
-                      style={{ opacity: fading ? 0 : 1, color: "#f5f5f5", transition: "opacity 0.3s ease" }}
-                      onClick={() => { setQuery(questions[activeQ]); searchPCB(questions[activeQ]); }}
-                    >
-                      {questions[activeQ]}
-                    </p>
-                    <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-red-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      🔍 Ask PCB
-                    </span>
-                  </div>
+            {showCarousel && (
+              <div
+                className="w-full max-w-3xl mx-auto mt-4 mb-10 rounded-2xl p-6 text-white shadow-xl"
+                style={{ background: "linear-gradient(135deg, #1a0505 0%, #0f0f0f 100%)", borderLeft: "3px solid #dc2626" }}
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+              >
+                <p className="text-xs uppercase mb-4 text-center" style={{ color: "#dc2626", letterSpacing: "0.15em" }}>
+                  Questions explored in MAKEIT OR BREAKIT
+                </p>
+                {questionsLoading ? (
+                  <div className="h-16 bg-gray-700 rounded-lg animate-pulse" />
+                ) : questions.length > 0 ? (
+                  <>
+                    <div className="group relative min-h-[4rem] flex items-center justify-center">
+                      <p
+                        title="Click to search this topic"
+                        className="text-xl cursor-pointer hover:underline text-center leading-snug"
+                        style={{ opacity: fading ? 0 : 1, color: "#f5f5f5", transition: "opacity 0.3s ease" }}
+                        onClick={() => { setQuery(questions[activeQ]); searchPCB(questions[activeQ]); }}
+                      >
+                        {questions[activeQ]}
+                      </p>
+                      <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-red-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        🔍 Ask PCB
+                      </span>
+                    </div>
 
-                  <div className="flex justify-center gap-2 mt-8">
-                    {questions.map((_, i) => (
+                    <div className="flex justify-center gap-2 mt-8">
+                      {questions.map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => goTo(i)}
+                          style={{
+                            width: i === activeQ ? "12px" : "8px",
+                            height: i === activeQ ? "12px" : "8px",
+                            backgroundColor: i === activeQ ? "#dc2626" : "#4b4b4b",
+                            borderRadius: "50%",
+                            transition: "all 0.2s",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-4">
                       <button
-                        key={i}
-                        onClick={() => goTo(i)}
-                        style={{
-                          width: i === activeQ ? "12px" : "8px",
-                          height: i === activeQ ? "12px" : "8px",
-                          backgroundColor: i === activeQ ? "#dc2626" : "#4b4b4b",
-                          borderRadius: "50%",
-                          transition: "all 0.2s",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: 0,
-                        }}
-                      />
-                    ))}
-                  </div>
+                        onClick={() => goTo((activeQ - 1 + questions.length) % questions.length)}
+                        style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#1f1f1f", border: "none", color: "#9ca3af", fontSize: "1.25rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#7f1d1d"}
+                        onMouseLeave={e => e.currentTarget.style.background = "#1f1f1f"}
+                      >
+                        ‹
+                      </button>
+                      <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>
+                        {activeQ + 1} / {questions.length}
+                      </span>
+                      <button
+                        onClick={() => goTo((activeQ + 1) % questions.length)}
+                        style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#1f1f1f", border: "none", color: "#9ca3af", fontSize: "1.25rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#7f1d1d"}
+                        onMouseLeave={e => e.currentTarget.style.background = "#1f1f1f"}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
 
-                  <div className="flex items-center justify-between mt-4">
-                    <button
-                      onClick={() => goTo((activeQ - 1 + questions.length) % questions.length)}
-                      style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#1f1f1f", border: "none", color: "#9ca3af", fontSize: "1.25rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#7f1d1d"}
-                      onMouseLeave={e => e.currentTarget.style.background = "#1f1f1f"}
-                    >
-                      ‹
-                    </button>
-                    <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>
-                      {activeQ + 1} / {questions.length}
-                    </span>
-                    <button
-                      onClick={() => goTo((activeQ + 1) % questions.length)}
-                      style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#1f1f1f", border: "none", color: "#9ca3af", fontSize: "1.25rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#7f1d1d"}
-                      onMouseLeave={e => e.currentTarget.style.background = "#1f1f1f"}
-                    >
-                      ›
-                    </button>
-                  </div>
-                </>
-              ) : null}
-            </div>
+            {/* Featured Questions Section */}
+            {showFeatured && (
+              <div className="w-full max-w-5xl mx-auto mt-6 mb-10">
+                <h2 className="text-2xl font-bold text-center mb-6">Questions worth exploring</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {(featuredData?.items ?? []).map((item, i) => (
+                    <div key={i} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                      <p className="font-semibold text-gray-900 text-base">{item.question}</p>
+                      <p className="text-gray-500 text-sm flex-1">{item.answer}</p>
+                      <button
+                        onClick={() => {
+                          const secs = timeToSeconds(item.timestamp);
+                          setLocation(`/podcasts/${item.podcastId}?t=${secs}`);
+                        }}
+                        className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition self-start"
+                      >
+                        <Play className="w-3 h-3 fill-current" /> Play Segment
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* PCB Result Card */}
             <AnimatePresence>

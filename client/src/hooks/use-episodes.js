@@ -119,6 +119,52 @@ export function useUpdateEpisode() {
   });
 }
 
+// GET /api/settings — site visibility settings
+const SETTINGS_KEY = "/api/settings";
+
+export function useSettings() {
+  return useQuery({
+    queryKey: [SETTINGS_KEY],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}${SETTINGS_KEY}`);
+      if (!res.ok) throw new Error("Failed to fetch settings");
+      return res.json();
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useUpdateSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ key, value }) => {
+      const res = await fetch(`${API_BASE}${SETTINGS_KEY}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      });
+      if (!res.ok) throw new Error("Failed to update setting");
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [SETTINGS_KEY] }),
+  });
+}
+
+// GET /api/featured-questions — AI-generated featured Q&A cards (cached 10 min on frontend, 24h in DB)
+const FEATURED_KEY = "/api/featured-questions";
+
+export function useFeaturedQuestions() {
+  return useQuery({
+    queryKey: [FEATURED_KEY],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}${FEATURED_KEY}`);
+      if (!res.ok) throw new Error("Failed to fetch featured questions");
+      return res.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 // DELETE /api/podcasts/:id — delete episode (backoffice)
 export function useDeleteEpisode() {
   const qc = useQueryClient();

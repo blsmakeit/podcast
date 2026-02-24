@@ -42,3 +42,10 @@ export const generatedContent = pgTable("generated_content", {
   content: jsonb("content").notNull(),
   generatedAt: timestamp("generated_at").defaultNow(),
 });
+
+export const siteSettings = pgTable("site_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
