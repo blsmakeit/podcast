@@ -46,6 +46,7 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
   const [transcriptSource, setTranscriptSource] = useState(null);
   const [transcriptText, setTranscriptText] = useState("");
   const [analysisMode, setAnalysisMode] = useState(null);
+  const [aiProvider, setAiProvider] = useState("claude");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Reinitialise state whenever the modal opens
@@ -74,6 +75,7 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
     setTranscriptSource(null);
     setTranscriptText("");
     setAnalysisMode(null);
+    setAiProvider("claude");
     setConfirmDelete(false);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -99,7 +101,7 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
     }
 
     extractYouTube(
-      { youtubeUrl: form.youtubeUrl, title: form.title, transcriptSource, transcriptText, analysisMode },
+      { youtubeUrl: form.youtubeUrl, title: form.title, transcriptSource, transcriptText, analysisMode, aiProvider },
       {
         onSuccess: (data) => {
           setForm((f) => ({
@@ -203,6 +205,7 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
     setTranscriptSource(null);
     setTranscriptText("");
     setAnalysisMode(null);
+    setAiProvider("claude");
     setConfirmDelete(false);
     onClose();
   };
@@ -375,6 +378,52 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
               </div>
               <p className="text-xs text-muted-foreground">
                 Full sends the complete transcript — best under 45 min. Summarised samples evenly across the video — recommended for longer episodes.
+              </p>
+            </div>
+
+            {/* AI Provider */}
+            <div className="space-y-2">
+              <Label>AI Provider</Label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAiProvider("claude")}
+                  disabled={isLoading}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    aiProvider === "claude"
+                      ? "border-primary bg-primary/5"
+                      : "border-input bg-background hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <img
+                    src="/logos/claude-logo.png"
+                    alt="Claude"
+                    className="w-5 h-5 object-contain"
+                    onError={(e) => { e.target.style.display = "none"; }}
+                  />
+                  <span className="text-sm font-medium">Claude</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiProvider("gemini")}
+                  disabled={isLoading}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    aiProvider === "gemini"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                      : "border-input bg-background hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <img
+                    src="/logos/gemini-logo.png"
+                    alt="Gemini"
+                    className="w-5 h-5 object-contain"
+                    onError={(e) => { e.target.style.display = "none"; }}
+                  />
+                  <span className="text-sm font-medium">Gemini</span>
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Claude — best quality. Gemini — free tier with higher limits.
               </p>
             </div>
           </div>

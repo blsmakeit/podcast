@@ -14,13 +14,14 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: "10mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // CORS — allow the Netlify frontend to call this API from a different domain
 app.use((req, res, next) => {

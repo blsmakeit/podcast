@@ -69,11 +69,11 @@ export function useCreateEpisode() {
 // POST /api/episodes/extract — YouTube auto-extraction (backoffice)
 export function useExtractYouTube() {
   return useMutation({
-    mutationFn: async ({ youtubeUrl, title, transcriptSource, transcriptText, analysisMode }) => {
+    mutationFn: async ({ youtubeUrl, title, transcriptSource, transcriptText, analysisMode, aiProvider }) => {
       const res = await fetch(`${API_BASE}/api/episodes/extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeUrl, title, transcriptSource, transcriptText, analysisMode }),
+        body: JSON.stringify({ youtubeUrl, title, transcriptSource, transcriptText, analysisMode, aiProvider }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Extraction failed" }));

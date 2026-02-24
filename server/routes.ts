@@ -5,12 +5,14 @@ import { api } from "@shared/routes";
 import { insertPodcastSchema, generatedContent, siteSettings } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function registerRoutes(
   httpServer: Server,
@@ -18,7 +20,7 @@ export async function registerRoutes(
 ): Promise<Server> {
 
   // GET /api/podcasts
-  app.get(api.podcasts.list.path, async (req, res) => {
+  app.get(api.podcasts.list.path, async (_req, res) => {
     const allPodcasts = await storage.getPodcasts();
     res.json(allPodcasts);
   });
@@ -122,12 +124,13 @@ export async function registerRoutes(
   // POST /api/episodes/extract — YouTube auto-extraction
   app.post("/api/episodes/extract", async (req, res) => {
     try {
-      const { youtubeUrl, title, transcriptSource, transcriptText, analysisMode } = req.body as {
+      const { youtubeUrl, title, transcriptSource, transcriptText, analysisMode, aiProvider } = req.body as {
         youtubeUrl?: string;
         title?: string;
         transcriptSource?: "supadata" | "file";
         transcriptText?: string;
         analysisMode?: "full" | "summary";
+        aiProvider?: "claude" | "gemini";
       };
 
       if (!youtubeUrl || !title) {
@@ -193,35 +196,65 @@ export async function registerRoutes(
         return `[${mm}:${ss}] ${item.text}`;
       });
 
-      // ANALYSIS MODE — sample evenly for summary to avoid token overload
+      // Auto-switch to summary mode for very long transcripts
+      const effectiveMode = allLines.length > 500 ? "summary" : (analysisMode ?? "full");
+
       let formattedTranscript: string;
-      if (analysisMode === "summary") {
-        const MAX_LINES = 200;
-        const step = Math.ceil(allLines.length / MAX_LINES);
+      if (effectiveMode === "summary") {
+        // Very aggressive sampling — max 150 lines evenly distributed
+        const MAX_LINES = 150;
+        const step = Math.max(1, Math.ceil(allLines.length / MAX_LINES));
         formattedTranscript = allLines.filter((_, i) => i % step === 0).join("\n");
       } else {
-        formattedTranscript = allLines.join("\n");
+        // Full mode — still cap at 800 lines to avoid rate limits
+        const MAX_LINES_FULL = 800;
+        if (allLines.length > MAX_LINES_FULL) {
+          const step = Math.ceil(allLines.length / MAX_LINES_FULL);
+          formattedTranscript = allLines.filter((_, i) => i % step === 0).join("\n");
+        } else {
+          formattedTranscript = allLines.join("\n");
+        }
       }
 
-      // Ask Claude to analyse the transcript
-      const claudeResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        system: `You are analysing a transcript from a MAKEIT.TECH videocast episode.
+      // Hard character cap regardless of mode — 6000 chars max (~1500 tokens)
+      if (formattedTranscript.length > 6000) {
+        const lines = formattedTranscript.split("\n");
+        const step = Math.ceil(lines.length / 100);
+        formattedTranscript = lines.filter((_, i) => i % step === 0).join("\n");
+      }
+
+      console.log(`[Extract] Transcript size: ${formattedTranscript.length} chars, ${allLines.length} original lines`);
+
+      // Analyse the transcript with the selected AI provider
+      const systemPrompt = `You are analysing a transcript from a MAKEIT.TECH videocast episode.
 Return ONLY a valid JSON object with exactly these fields:
 - "description": string (2-3 sentences summarising the episode)
 - "category": one of exactly: "Technology" | "Hardware & PCB" | "Design" | "Business" | "AI & Software" | "Innovation" | "Other"
 - "keyMoments": array of objects with { "time": "MM:SS", "topic": string (3-5 words), "text": string (1-2 sentences describing what is discussed at this moment) }
   - Include one entry per major topic change, roughly every 1-3 minutes
   - Aim for 8-20 key moments depending on episode length
-  - "time" must match a timestamp that appears in the transcript`,
-        messages: [{ role: "user", content: `Title: ${title}\n\nTranscript:\n${formattedTranscript}` }],
-      });
+  - "time" must match a timestamp that appears in the transcript`;
+      const userMessage = `Title: ${title}\n\nTranscript:\n${formattedTranscript}`;
 
-      const block = claudeResponse.content[0];
-      const responseText = block.type === "text" ? block.text : null;
+      console.log(`[Extract] Using AI provider: ${aiProvider ?? "claude (default)"}`);
+      let responseText: string;
+      if (aiProvider === "gemini") {
+        const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const geminiResult = await geminiModel.generateContent(`${systemPrompt}\n\n${userMessage}`);
+        responseText = geminiResult.response.text();
+      } else {
+        const claudeResponse = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userMessage }],
+        });
+        const block = claudeResponse.content[0];
+        responseText = block.type === "text" ? block.text : "";
+      }
+
       if (!responseText) {
-        return res.status(500).json({ message: "No response from Claude" });
+        return res.status(500).json({ message: "No response from AI" });
       }
 
       // Strip any markdown code fences if Claude wrapped the JSON
@@ -263,7 +296,7 @@ Return ONLY a valid JSON object with exactly these fields:
   });
 
   // GET /api/settings
-  app.get("/api/settings", async (req, res) => {
+  app.get("/api/settings", async (_req, res) => {
     try {
       const settings = await db.select().from(siteSettings);
       const result: Record<string, unknown> = {};
