@@ -84,6 +84,41 @@ export function useExtractYouTube() {
   });
 }
 
+// GET /api/questions — AI-generated carousel questions (cached 10 min on frontend, 24h in DB)
+const QUESTIONS_KEY = "/api/questions";
+
+export function useQuestions() {
+  return useQuery({
+    queryKey: [QUESTIONS_KEY],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}${QUESTIONS_KEY}`);
+      if (!res.ok) throw new Error("Failed to fetch questions");
+      return res.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+// PUT /api/podcasts/:id — update episode (backoffice)
+export function useUpdateEpisode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }) => {
+      const res = await fetch(`${API_BASE}${EPISODES_KEY}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to update episode" }));
+        throw new Error(err.message);
+      }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [EPISODES_KEY] }),
+  });
+}
+
 // DELETE /api/podcasts/:id — delete episode (backoffice)
 export function useDeleteEpisode() {
   const qc = useQueryClient();

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { useEpisodes, usePCBSearch } from "@/hooks/use-episodes";
+import { useEpisodes, usePCBSearch, useQuestions } from "@/hooks/use-episodes";
 import { Layout } from "@/components/Layout";
 import { EpisodeCard } from "@/components/EpisodeCard";
 import { AddEpisodeModal } from "@/components/backoffice/AddEpisodeModal";
@@ -10,6 +10,14 @@ import { Card } from "@/components/ui/card";
 import { useBackoffice } from "@/components/backoffice/BackofficeContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight, Loader2, Play, Plus, X } from "lucide-react";
+
+function timeToSeconds(ts) {
+  if (!ts) return 0;
+  const parts = ts.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
 
 function ClockIcon({ className }) {
   return (
@@ -39,6 +47,30 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // Questions carousel
+  const { data: questionsData, isLoading: questionsLoading } = useQuestions();
+  const questions = questionsData?.questions ?? [];
+  const [activeQ, setActiveQ] = useState(0);
+  const [fading, setFading] = useState(false);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (questions.length === 0 || paused) return;
+    const timer = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setActiveQ(prev => (prev + 1) % questions.length);
+        setFading(false);
+      }, 300);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [questions.length, paused]);
+
+  const goTo = (i) => {
+    setFading(true);
+    setTimeout(() => { setActiveQ(i); setFading(false); }, 300);
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (!query.trim()) return;
@@ -47,7 +79,8 @@ export default function Home() {
 
   const handlePlayResult = () => {
     if (pcbResult?.podcastId && pcbResult?.timestamp) {
-      setLocation(`/podcasts/${pcbResult.podcastId}?t=${pcbResult.timestamp}`);
+      const seconds = timeToSeconds(pcbResult.timestamp);
+      setLocation(`/podcasts/${pcbResult.podcastId}?t=${seconds}`);
     }
   };
 
@@ -66,22 +99,26 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            {/* PCB badge */}
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-6">
+            {/* Show name */}
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">MAKEIT.TECH presents</p>
+            <h1 className="font-display font-black text-6xl md:text-8xl mb-4 tracking-tight leading-[1]">
+              MAKEIT<br /><span className="text-gradient">OR BREAKIT</span>
+            </h1>
+            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
+              The show where founders, engineers and builders share what it really takes — or what breaks you.
+            </p>
+
+            {/* PCB badge + label */}
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-3">
               <PCBIcon className="w-4 h-4" />
               PCB — Podcast Content Browser
             </span>
-
-            <h1 className="font-display font-bold text-5xl md:text-7xl mb-6 tracking-tight leading-[1.1]">
-              Find the <span className="text-gradient">exact moment</span><br />that matters.
-            </h1>
-
-            <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-              Don't waste time scrubbing through hours of content. Just ask our <strong className="text-foreground">PCB</strong> what you're looking for, and we'll take you right there.
+            <p className="text-sm text-muted-foreground mb-4">
+              Search inside <strong className="text-foreground">MAKEIT OR BREAKIT</strong> episodes
             </p>
 
             {/* PCB Search Bar */}
-            <div className="relative max-w-2xl mx-auto mb-12 group">
+            <div className="relative max-w-2xl mx-auto mb-6 group">
               <div className="absolute -inset-1 bg-gradient-to-r from-primary to-red-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200" />
               <form onSubmit={handleSearch} className="relative flex items-center bg-card rounded-xl p-2 shadow-xl border border-border/50">
                 <Search className="w-5 h-5 text-muted-foreground ml-3 shrink-0" />
@@ -101,6 +138,78 @@ export default function Home() {
                   {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Ask PCB"}
                 </Button>
               </form>
+            </div>
+
+            {/* Questions Carousel */}
+            <div
+              className="w-full max-w-3xl mx-auto mt-4 mb-10 rounded-2xl p-6 text-white shadow-xl"
+              style={{ background: "linear-gradient(135deg, #1a0505 0%, #0f0f0f 100%)", borderLeft: "3px solid #dc2626" }}
+              onMouseEnter={() => setPaused(true)}
+              onMouseLeave={() => setPaused(false)}
+            >
+              <p className="text-xs uppercase mb-4 text-center" style={{ color: "#dc2626", letterSpacing: "0.15em" }}>
+                Questions explored in MAKEIT OR BREAKIT
+              </p>
+              {questionsLoading ? (
+                <div className="h-16 bg-gray-700 rounded-lg animate-pulse" />
+              ) : questions.length > 0 ? (
+                <>
+                  <div className="group relative min-h-[4rem] flex items-center justify-center">
+                    <p
+                      title="Click to search this topic"
+                      className="text-xl cursor-pointer hover:underline text-center leading-snug"
+                      style={{ opacity: fading ? 0 : 1, color: "#f5f5f5", transition: "opacity 0.3s ease" }}
+                      onClick={() => { setQuery(questions[activeQ]); searchPCB(questions[activeQ]); }}
+                    >
+                      {questions[activeQ]}
+                    </p>
+                    <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-red-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      🔍 Ask PCB
+                    </span>
+                  </div>
+
+                  <div className="flex justify-center gap-2 mt-8">
+                    {questions.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => goTo(i)}
+                        style={{
+                          width: i === activeQ ? "12px" : "8px",
+                          height: i === activeQ ? "12px" : "8px",
+                          backgroundColor: i === activeQ ? "#dc2626" : "#4b4b4b",
+                          borderRadius: "50%",
+                          transition: "all 0.2s",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mt-4">
+                    <button
+                      onClick={() => goTo((activeQ - 1 + questions.length) % questions.length)}
+                      style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#1f1f1f", border: "none", color: "#9ca3af", fontSize: "1.25rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#7f1d1d"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#1f1f1f"}
+                    >
+                      ‹
+                    </button>
+                    <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>
+                      {activeQ + 1} / {questions.length}
+                    </span>
+                    <button
+                      onClick={() => goTo((activeQ + 1) % questions.length)}
+                      style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#1f1f1f", border: "none", color: "#9ca3af", fontSize: "1.25rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#7f1d1d"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#1f1f1f"}
+                    >
+                      ›
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             {/* PCB Result Card */}

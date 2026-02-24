@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Loader2, Sparkles, CheckCircle2, Zap, FileText } from "lucide-react";
-import { useCreateEpisode, useExtractYouTube } from "@/hooks/use-episodes";
+import { useCreateEpisode, useUpdateEpisode, useDeleteEpisode, useExtractYouTube } from "@/hooks/use-episodes";
 import { useToast } from "@/hooks/use-toast";
 
 const CATEGORIES = [
@@ -32,23 +32,53 @@ const DEFAULT_FORM = {
   category: "Technology",
 };
 
-export function AddEpisodeModal({ open, onClose }) {
+export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
+  const isEditMode = !!episodeId;
   const { toast } = useToast();
   const { mutate: createEpisode, isPending: isPublishing } = useCreateEpisode();
+  const { mutate: updateEpisode, isPending: isUpdating } = useUpdateEpisode();
+  const { mutate: deleteEpisode, isPending: isDeleting } = useDeleteEpisode();
   const { mutate: extractYouTube, isPending: isExtracting } = useExtractYouTube();
 
   const [form, setForm] = useState(DEFAULT_FORM);
   const [transcripts, setTranscripts] = useState([emptyTranscript()]);
-  // Track which fields were auto-filled by extraction
   const [autoFilled, setAutoFilled] = useState({});
-  // Extraction options
-  const [transcriptSource, setTranscriptSource] = useState(null); // null | "supadata" | "file"
+  const [transcriptSource, setTranscriptSource] = useState(null);
   const [transcriptText, setTranscriptText] = useState("");
-  const [analysisMode, setAnalysisMode] = useState(null); // null | "full" | "summary"
+  const [analysisMode, setAnalysisMode] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Reinitialise state whenever the modal opens
+  useEffect(() => {
+    if (!open) return;
+    if (isEditMode && initialData) {
+      const embedId = initialData.videoUrl?.match(/youtube\.com\/embed\/([^?&]+)/)?.[1];
+      setForm({
+        title: initialData.title ?? "",
+        description: initialData.description ?? "",
+        youtubeUrl: embedId ? `https://www.youtube.com/watch?v=${embedId}` : "",
+        videoUrl: initialData.videoUrl ?? "",
+        thumbnailUrl: initialData.thumbnailUrl ?? "",
+        category: initialData.category ?? "Technology",
+      });
+      setTranscripts(
+        initialData.transcripts?.length > 0
+          ? initialData.transcripts.map((t) => ({ time: t.time ?? "", topic: t.topic ?? "", text: t.text ?? "" }))
+          : [emptyTranscript()]
+      );
+    } else {
+      setForm(DEFAULT_FORM);
+      setTranscripts([emptyTranscript()]);
+    }
+    setAutoFilled({});
+    setTranscriptSource(null);
+    setTranscriptText("");
+    setAnalysisMode(null);
+    setConfirmDelete(false);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateField = (field, value) => {
     setForm((f) => ({ ...f, [field]: value }));
-    // Clear auto-fill badge if user edits manually
     if (autoFilled[field]) setAutoFilled((a) => ({ ...a, [field]: false }));
   };
 
@@ -93,7 +123,7 @@ export function AddEpisodeModal({ open, onClose }) {
             category: !!data.category,
             transcripts: !!(data.keyMoments?.length),
           });
-          toast({ title: "Extracted successfully", description: "All fields have been auto-filled. Review and publish when ready." });
+          toast({ title: "Extracted successfully", description: "All fields have been auto-filled. Review and save when ready." });
         },
         onError: (err) => {
           toast({ title: "Extraction failed", description: err.message, variant: "destructive" });
@@ -110,19 +140,60 @@ export function AddEpisodeModal({ open, onClose }) {
     }
 
     const validTranscripts = transcripts.filter((t) => t.time.trim() && t.topic.trim() && t.text.trim());
+    const payload = {
+      title: form.title,
+      description: form.description,
+      videoUrl: form.videoUrl,
+      thumbnailUrl: form.thumbnailUrl,
+      category: form.category,
+      transcripts: validTranscripts,
+    };
 
-    createEpisode(
-      { title: form.title, description: form.description, videoUrl: form.videoUrl, thumbnailUrl: form.thumbnailUrl, category: form.category, transcripts: validTranscripts },
-      {
-        onSuccess: () => {
-          toast({ title: "Episode published", description: `"${form.title}" is now live on the platform.` });
-          handleClose();
-        },
-        onError: (err) => {
-          toast({ title: "Failed to publish episode", description: err.message, variant: "destructive" });
-        },
-      }
-    );
+    if (isEditMode) {
+      updateEpisode(
+        { id: episodeId, data: payload },
+        {
+          onSuccess: () => {
+            toast({ title: "Episode updated", description: `"${form.title}" has been saved.` });
+            handleClose();
+          },
+          onError: (err) => {
+            toast({ title: "Failed to save", description: err.message, variant: "destructive" });
+          },
+        }
+      );
+    } else {
+      createEpisode(
+        payload,
+        {
+          onSuccess: () => {
+            toast({ title: "Episode published", description: `"${form.title}" is now live on the platform.` });
+            handleClose();
+          },
+          onError: (err) => {
+            toast({ title: "Failed to publish episode", description: err.message, variant: "destructive" });
+          },
+        }
+      );
+    }
+  };
+
+  const handleDelete = (e) => {
+    e.preventDefault();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 3000);
+      return;
+    }
+    deleteEpisode(episodeId, {
+      onSuccess: () => {
+        toast({ title: "Episode deleted", description: `"${form.title}" has been removed.` });
+        handleClose();
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Could not delete episode. Please try again.", variant: "destructive" });
+      },
+    });
   };
 
   const handleClose = () => {
@@ -132,6 +203,7 @@ export function AddEpisodeModal({ open, onClose }) {
     setTranscriptSource(null);
     setTranscriptText("");
     setAnalysisMode(null);
+    setConfirmDelete(false);
     onClose();
   };
 
@@ -149,15 +221,18 @@ export function AddEpisodeModal({ open, onClose }) {
     analysisMode !== null &&
     (transcriptSource === "supadata" || transcriptText.trim().length > 0);
 
-  const isLoading = isPublishing || isExtracting;
+  const isLoading = isPublishing || isUpdating || isExtracting || isDeleting;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Episode</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Episode" : "Add New Episode"}</DialogTitle>
           <DialogDescription>
-            Enter a title and YouTube URL, then click <strong>Extract</strong> to auto-fill everything else.
+            {isEditMode
+              ? "Update the episode details, or re-extract key moments from YouTube."
+              : <>Enter a title and YouTube URL, then click <strong>Extract</strong> to auto-fill everything else.</>
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -197,7 +272,7 @@ export function AddEpisodeModal({ open, onClose }) {
                 >
                   {isExtracting
                     ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting…</>
-                    : <><Sparkles className="w-4 h-4" /> Extract</>
+                    : <><Sparkles className="w-4 h-4" /> {isEditMode ? "Re-extract" : "Extract"}</>
                   }
                 </Button>
               </div>
@@ -439,17 +514,38 @@ export function AddEpisodeModal({ open, onClose }) {
 
           <Separator />
 
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading} className="gap-2">
-              {isPublishing
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</>
-                : "Publish Episode"
-              }
-            </Button>
-          </div>
+          {isEditMode ? (
+            <div className="flex justify-between gap-3">
+              <Button
+                type="button"
+                variant={confirmDelete ? "destructive" : "outline"}
+                onClick={handleDelete}
+                disabled={isLoading}
+                className="gap-2"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {isDeleting ? "Deleting…" : confirmDelete ? "Confirm Delete" : "Delete Episode"}
+              </Button>
+              <Button type="submit" disabled={isLoading} className="gap-2">
+                {isUpdating
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                  : "Save Changes"
+                }
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading} className="gap-2">
+                {isPublishing
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</>
+                  : "Publish Episode"
+                }
+              </Button>
+            </div>
+          )}
         </form>
       </DialogContent>
     </Dialog>

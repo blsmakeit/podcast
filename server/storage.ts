@@ -6,6 +6,7 @@ export interface IStorage {
   getPodcasts(): Promise<Podcast[]>;
   getPodcast(id: number): Promise<Podcast | undefined>;
   createPodcast(podcast: InsertPodcast): Promise<Podcast>;
+  updatePodcast(id: number, data: Partial<InsertPodcast>): Promise<Podcast | undefined>;
   deletePodcast(id: number): Promise<void>;
 }
 
@@ -22,6 +23,11 @@ export class DatabaseStorage implements IStorage {
   async createPodcast(podcast: InsertPodcast): Promise<Podcast> {
     const [newPodcast] = await db.insert(podcasts).values(podcast).returning();
     return newPodcast;
+  }
+
+  async updatePodcast(id: number, data: Partial<InsertPodcast>): Promise<Podcast | undefined> {
+    const [updated] = await db.update(podcasts).set(data).where(eq(podcasts.id, id)).returning();
+    return updated;
   }
 
   async deletePodcast(id: number): Promise<void> {

@@ -35,3 +35,10 @@ export type AIQueryResponse = {
   timestamp: string | null;
   explanation: string;
 };
+
+export const generatedContent = pgTable("generated_content", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  content: jsonb("content").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow(),
+});

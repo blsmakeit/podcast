@@ -2,9 +2,11 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPodcastSchema } from "@shared/schema";
+import { insertPodcastSchema, generatedContent } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -36,12 +38,33 @@ export async function registerRoutes(
       const data = insertPodcastSchema.parse(req.body);
       const created = await storage.createPodcast(data);
       res.status(201).json(created);
+      // Regenerate questions in background — direct call, no HTTP round-trip
+      regenerateQuestions().catch((e) => console.error('Question regen failed:', e));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0]?.message ?? 'Validation error' });
       }
       console.error(err);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // PUT /api/podcasts/:id — update episode (backoffice)
+  app.put(api.podcasts.get.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+      const data = insertPodcastSchema.partial().parse(req.body);
+      const updated = await storage.updatePodcast(id, data);
+      if (!updated) return res.status(404).json({ message: "Episode not found" });
+      res.json(updated);
+      regenerateQuestions().catch((e) => console.error('Question regen failed:', e));
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message ?? 'Validation error' });
+      }
+      console.error("update error:", err);
+      res.status(500).json({ message: "Failed to update episode" });
     }
   });
 
@@ -212,9 +235,69 @@ Return ONLY a valid JSON object with exactly these fields:
     }
   });
 
+  // GET /api/questions — AI-generated suggested search questions (cached 24h in DB)
+  app.get("/api/questions", async (req, res) => {
+    try {
+      const forceRefresh = req.query.refresh === "true";
+
+      // Check cache first
+      if (!forceRefresh) {
+        const cached = await db.select().from(generatedContent)
+          .where(eq(generatedContent.key, "homepage_questions"))
+          .limit(1);
+        if (cached.length > 0) {
+          const ageHours = (Date.now() - new Date(cached[0].generatedAt as Date).getTime()) / 3600000;
+          if (ageHours < 24) {
+            return res.json({ questions: cached[0].content, cached: true });
+          }
+        }
+      }
+
+      // Generate fresh (upsert to DB is handled inside regenerateQuestions)
+      const questions = await regenerateQuestions();
+      res.json({ questions, cached: false });
+    } catch (err) {
+      console.error("questions error:", err);
+      res.status(500).json({ message: "Failed to generate questions" });
+    }
+  });
+
   await seedDatabase();
 
   return httpServer;
+}
+
+async function regenerateQuestions(): Promise<string[]> {
+  const episodes = await storage.getPodcasts();
+  const context = episodes.map(ep =>
+    `Episode: ${ep.title}\nTopics: ${(ep.transcripts as Array<{time: string; topic: string; text: string}>).map(t => t.topic).join(", ")}`
+  ).join("\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1000,
+    system: `You write very short search prompt suggestions for a podcast platform.
+Each suggestion must be under 8 words. No exceptions.
+Style: casual, curious, conversational — like someone typing into a search bar.
+Bad example (too long): "When building an MVP in 2024 with Node.js and React, how do you avoid over-engineering?"
+Good examples: "How do you validate an idea fast?", "When should you pivot?", "What kills most startups early?", "How do founders handle burnout?"
+Return ONLY a JSON array of exactly 8 strings. No other text.
+Format: ["Question 1?", "Question 2?", ...]`,
+    messages: [{ role: "user", content: `Topics from our podcast episodes:\n${context}\n\nWrite 8 short search suggestions based on these topics.` }],
+  });
+
+  const raw = (response.content[0] as { type: string; text: string }).text
+    .replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const questions: string[] = JSON.parse(raw);
+
+  await db.insert(generatedContent)
+    .values({ key: "homepage_questions", content: questions })
+    .onConflictDoUpdate({
+      target: generatedContent.key,
+      set: { content: questions, generatedAt: new Date() },
+    });
+
+  return questions;
 }
 
 function extractVideoId(url: string): string | null {

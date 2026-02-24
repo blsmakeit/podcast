@@ -1,32 +1,15 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { PlayCircle, Clock, Trash2, Loader2, Tag } from "lucide-react";
+import { PlayCircle, Clock, Pencil, Tag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useBackoffice } from "@/components/backoffice/BackofficeContext";
-import { useDeleteEpisode } from "@/hooks/use-episodes";
-import { useToast } from "@/hooks/use-toast";
+import { AddEpisodeModal } from "@/components/backoffice/AddEpisodeModal";
 
 export function EpisodeCard({ podcast, index }) {
   const { isAdmin } = useBackoffice();
-  const { mutate: deleteEpisode, isPending: isDeleting } = useDeleteEpisode();
-  const { toast } = useToast();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const handleDelete = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      setTimeout(() => setConfirmDelete(false), 3000);
-      return;
-    }
-    deleteEpisode(podcast.id, {
-      onSuccess: () => toast({ title: "Episode deleted", description: `"${podcast.title}" has been removed.` }),
-      onError: () => toast({ title: "Error", description: "Could not delete episode. Please try again.", variant: "destructive" }),
-    });
-  };
+  const [editing, setEditing] = useState(false);
 
   return (
     <motion.div
@@ -37,14 +20,13 @@ export function EpisodeCard({ podcast, index }) {
     >
       {isAdmin && (
         <Button
-          variant={confirmDelete ? "destructive" : "secondary"}
+          variant="secondary"
           size="sm"
-          onClick={handleDelete}
-          disabled={isDeleting}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(true); }}
           className="absolute top-3 right-3 z-20 gap-1.5 shadow-lg"
         >
-          {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-          {isDeleting ? "Deleting…" : confirmDelete ? "Confirm Delete" : "Delete"}
+          <Pencil className="w-3.5 h-3.5" />
+          Edit
         </Button>
       )}
 
@@ -83,6 +65,15 @@ export function EpisodeCard({ podcast, index }) {
           </CardContent>
         </Card>
       </Link>
+
+      {editing && (
+        <AddEpisodeModal
+          open={editing}
+          onClose={() => setEditing(false)}
+          episodeId={podcast.id}
+          initialData={podcast}
+        />
+      )}
     </motion.div>
   );
 }
