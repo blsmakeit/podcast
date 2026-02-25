@@ -1,6 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
+
+const BUTTON_SIZE = 56; // w-14 = 56px
+const PANEL_GAP = 12;   // gap between top of button and bottom of panel
+const EDGE_MARGIN = 8;  // min distance from viewport edge
+
+function loadPos() {
+  try {
+    const saved = localStorage.getItem('chatWidgetPos');
+    return saved ? JSON.parse(saved) : { x: 24, y: 24 };
+  } catch {
+    return { x: 24, y: 24 };
+  }
+}
 
 function ChatMessages({ messages, isPending }) {
   const bottomRef = useRef(null);
@@ -100,17 +113,94 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const { messages, sendMessage, isPending, clearChat } = useChat();
 
+  // Position stored as { x: rightOffset, y: bottomOffset } in pixels
+  // Default: 24px from bottom-right (equivalent to Tailwind's bottom-6 right-6)
+  const [pos, setPos] = useState(loadPos);
+  const isDragging = useRef(false);
+  const hasDragged = useRef(false);
+  const dragOrigin = useRef({ mouseX: 0, mouseY: 0, posX: 0, posY: 0 });
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    isDragging.current = true;
+    hasDragged.current = false;
+    dragOrigin.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      posX: pos.x,
+      posY: pos.y,
+    };
+  }, [pos]);
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!isDragging.current) return;
+
+      const dx = e.clientX - dragOrigin.current.mouseX;
+      const dy = e.clientY - dragOrigin.current.mouseY;
+
+      // Consider it a drag after 4px movement
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        hasDragged.current = true;
+      }
+
+      // Moving right → right offset decreases (button moves right)
+      // Moving down  → bottom offset decreases (button moves down)
+      const newX = Math.max(
+        EDGE_MARGIN,
+        Math.min(window.innerWidth - BUTTON_SIZE - EDGE_MARGIN, dragOrigin.current.posX - dx)
+      );
+      const newY = Math.max(
+        EDGE_MARGIN,
+        Math.min(window.innerHeight - BUTTON_SIZE - EDGE_MARGIN, dragOrigin.current.posY - dy)
+      );
+
+      setPos({ x: newX, y: newY });
+    };
+
+    const onMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      // Persist final position after drag ends
+      setPos(current => {
+        localStorage.setItem('chatWidgetPos', JSON.stringify(current));
+        return current;
+      });
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  const handleClick = () => {
+    // Only toggle open/close if the user didn't drag
+    if (!hasDragged.current) {
+      setIsOpen(prev => !prev);
+    }
+  };
+
+  // Panel sits above the button, aligned to the same right edge
+  const panelBottom = pos.y + BUTTON_SIZE + PANEL_GAP;
+  const panelRight = pos.x;
+
   return (
     <>
       {/* Floating button + thought bubble */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+      <div
+        style={{ position: 'fixed', bottom: pos.y, right: pos.x, zIndex: 50 }}
+        className="flex flex-col items-end select-none"
+      >
         <AnimatePresence>
           {!isOpen && (
             <motion.div
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 5 }}
-              className="mb-2 bg-white border border-gray-200 shadow-md rounded-2xl px-3 py-1.5 text-xs font-medium text-gray-700 whitespace-nowrap"
+              className="mb-2 bg-white border border-gray-200 shadow-md rounded-2xl px-3 py-1.5 text-xs font-medium text-gray-700 whitespace-nowrap pointer-events-none"
             >
               Ask me anything ✨
             </motion.div>
@@ -120,14 +210,13 @@ export default function ChatWidget() {
         <div className="relative">
           {/* Pulse ring — only when closed */}
           {!isOpen && (
-            <span className="absolute inset-0 rounded-full bg-red-500 opacity-30 animate-ping" />
+            <span className="absolute inset-0 rounded-full bg-red-500 opacity-30 animate-ping pointer-events-none" />
           )}
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsOpen(prev => !prev)}
-            className="w-14 h-14 bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-red-700 transition relative z-10 text-2xl"
+          <button
+            onMouseDown={handleMouseDown}
+            onClick={handleClick}
+            className="w-14 h-14 bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-red-700 transition relative z-10 text-2xl cursor-grab active:cursor-grabbing"
             aria-label={isOpen ? 'Close chat' : 'Open chat'}
           >
             <AnimatePresence mode="wait" initial={false}>
@@ -141,11 +230,11 @@ export default function ChatWidget() {
                 {isOpen ? '✕' : '💬'}
               </motion.span>
             </AnimatePresence>
-          </motion.button>
+          </button>
         </div>
       </div>
 
-      {/* Chat panel */}
+      {/* Chat panel — follows the button position */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -153,8 +242,15 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-24 right-6 z-50 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
-            style={{ height: '520px' }}
+            style={{
+              position: 'fixed',
+              bottom: panelBottom,
+              right: panelRight,
+              zIndex: 50,
+              width: '24rem',
+              height: '520px',
+            }}
+            className="bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="bg-red-600 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">

@@ -136,14 +136,14 @@ export function Layout({ children }) {
           </div>
         </div>
 
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="container mx-auto px-4 mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 relative">
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} MAKEIT.TECH. All rights reserved.
           </p>
-          {/* Subtle admin toggle */}
+          {/* Subtle admin toggle — centrado na linha */}
           <button
             onClick={isAdmin ? logout : openLogin}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors sm:absolute sm:left-1/2 sm:-translate-x-1/2"
             title={isAdmin ? "Exit backoffice" : "Backoffice access"}
           >
             {isAdmin ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}

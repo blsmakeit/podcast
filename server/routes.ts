@@ -456,7 +456,7 @@ BEHAVIOUR RULES:
 - For contact/guest questions, always include an action button to /contact
 - For subscription questions, include an action button to /subscribe
 - If a question references a specific episode, include an action button to that episode
-- If the question is completely outside your knowledge, say so politely and suggest using the PCB search bar
+- If no episode chunks were retrieved but the question is about topics that might be covered in the show (tech, entrepreneurship, hardware, startups, AI, design, innovation), still try to answer based on the company knowledge and suggest using the PCB search bar for specific timestamps. Only say you don't know if the topic is completely unrelated to tech, entrepreneurship or innovation
 - Keep answers concise and conversational — 2-4 sentences max unless detail is needed
 - ALWAYS respond in the same language the user writes in (Portuguese or English)
 
@@ -477,8 +477,17 @@ actions and sources are optional — only include when relevant. Never include e
 
       const block = claudeResponse.content[0];
       const responseText = block.type === "text" ? block.text : "";
-      const cleaned = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      const parsed = JSON.parse(cleaned);
+
+      let parsed;
+      try {
+        const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        // Try to extract JSON if wrapped in text
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+      } catch {
+        // If Claude didn't return JSON, wrap the text response
+        parsed = { message: responseText.trim() };
+      }
 
       res.json(parsed);
     } catch (err) {
@@ -500,7 +509,7 @@ async function getEmbedding(text: string): Promise<number[]> {
       Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: "voyage-large-2", input: [text] }),
+    body: JSON.stringify({ model: "voyage-3", input: [text] }),
   });
   if (!res.ok) throw new Error(`Voyage AI error: ${res.status}`);
   const data = await res.json() as { data: Array<{ embedding: number[] }> };
@@ -544,7 +553,7 @@ async function generateAndStoreEmbeddings(episodeId: number) {
       Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: "voyage-large-2", input: texts }),
+    body: JSON.stringify({ model: "voyage-3", input: texts }),
   });
   const embData = await res.json() as { data: Array<{ embedding: number[] }> };
 
@@ -566,7 +575,7 @@ async function generateAndStoreEmbeddings(episodeId: number) {
 }
 
 // ── pgvector cosine similarity search ───────────────────────────────────────
-async function searchChunks(queryEmbedding: number[], topK = 8): Promise<unknown[]> {
+async function searchChunks(queryEmbedding: number[], topK = 12): Promise<unknown[]> {
   const vectorStr = `[${queryEmbedding.join(",")}]`;
   const results = await db.execute(sql`
     SELECT
@@ -580,7 +589,7 @@ async function searchChunks(queryEmbedding: number[], topK = 8): Promise<unknown
       1 - (ec.embedding <=> ${vectorStr}::vector) AS similarity
     FROM episode_chunks ec
     LEFT JOIN podcasts p ON p.id = ec.episode_id
-    WHERE 1 - (ec.embedding <=> ${vectorStr}::vector) > 0.55
+    WHERE 1 - (ec.embedding <=> ${vectorStr}::vector) > 0.35
     ORDER BY ec.embedding <=> ${vectorStr}::vector
     LIMIT ${topK}
   `);
