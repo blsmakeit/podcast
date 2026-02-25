@@ -81,7 +81,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: 'Episode not found' });
       }
       await storage.deletePodcast(id);
-      res.status(204).send();
+      // Regenerate in background
+      regenerateQuestions().catch((e) => console.error('Question regen failed:', e));
+      res.json({ success: true });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Internal server error' });
@@ -419,6 +421,14 @@ Return ONLY a valid JSON object with exactly these fields:
 
 async function regenerateQuestions(): Promise<string[]> {
   const episodes = await storage.getPodcasts();
+
+  if (episodes.length === 0) {
+    // Clear both caches when no episodes remain
+    await db.delete(generatedContent).where(eq(generatedContent.key, 'homepage_questions'));
+    await db.delete(generatedContent).where(eq(generatedContent.key, 'featured_questions'));
+    return [];
+  }
+
   const context = episodes.map(ep =>
     `Episode: ${ep.title}\nTopics: ${(ep.transcripts as Array<{time: string; topic: string; text: string}>).map(t => t.topic).join(", ")}`
   ).join("\n");
