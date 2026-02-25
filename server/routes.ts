@@ -2,13 +2,14 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPodcastSchema, generatedContent, siteSettings, subscribers } from "@shared/schema";
+import { insertPodcastSchema, generatedContent, siteSettings, subscribers, episodeChunks } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Resend } from "resend";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { companyKnowledge } from "./knowledge/company";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -44,6 +45,8 @@ export async function registerRoutes(
       res.status(201).json(created);
       // Regenerate questions in background — direct call, no HTTP round-trip
       regenerateQuestions().catch((e) => console.error('Question regen failed:', e));
+      // Generate and store RAG embeddings in background
+      generateAndStoreEmbeddings(created.id).catch((e) => console.error('Embedding failed:', e));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0]?.message ?? 'Validation error' });
@@ -63,6 +66,7 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "Episode not found" });
       res.json(updated);
       regenerateQuestions().catch((e) => console.error('Question regen failed:', e));
+      generateAndStoreEmbeddings(id).catch((e) => console.error('Embedding failed:', e));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0]?.message ?? 'Validation error' });
@@ -414,9 +418,173 @@ Return ONLY a valid JSON object with exactly these fields:
     }
   });
 
+  // POST /api/chat — RAG chatbot
+  app.post("/api/chat", async (req, res) => {
+    const { messages } = req.body as {
+      messages: Array<{ role: "user" | "assistant"; content: string }>;
+    };
+
+    if (!messages?.length) {
+      return res.status(400).json({ message: "Messages required" });
+    }
+
+    try {
+      const lastUserMsg = [...messages].reverse().find(m => m.role === "user")?.content ?? "";
+
+      const queryEmbedding = await getEmbedding(lastUserMsg);
+      const relevantChunks = await searchChunks(queryEmbedding);
+
+      const chunksContext = relevantChunks.length > 0
+        ? relevantChunks.map((c: any) =>
+            c.chunk_type === "company"
+              ? `[Company info] ${c.content}`
+              : `[Episode: "${c.episode_title}" @ ${c.time_ref ?? "N/A"}] ${c.content}`
+          ).join("\n\n")
+        : "No specific episode content found for this query.";
+
+      const systemPrompt = `You are the MAKEIT OR BREAKIT chatbot — a helpful assistant for the MAKEIT OR BREAKIT podcast platform.
+
+COMPANY & SHOW KNOWLEDGE:
+${companyKnowledge}
+
+RELEVANT EPISODE CONTENT (retrieved via semantic search):
+${chunksContext}
+
+BEHAVIOUR RULES:
+- Answer questions about episodes using the retrieved content above — cite the episode title and timestamp when relevant
+- Answer questions about the company, hosts, and show using the company knowledge above
+- For contact/guest questions, always include an action button to /contact
+- For subscription questions, include an action button to /subscribe
+- If a question references a specific episode, include an action button to that episode
+- If the question is completely outside your knowledge, say so politely and suggest using the PCB search bar
+- Keep answers concise and conversational — 2-4 sentences max unless detail is needed
+- ALWAYS respond in the same language the user writes in (Portuguese or English)
+
+RESPONSE FORMAT — return ONLY valid JSON:
+{
+  "message": "your response text here",
+  "actions": [{ "label": "Go to Contact", "href": "/contact" }],
+  "sources": [{ "episodeTitle": "Episode name", "timeRef": "02:37", "topic": "Topic name" }]
+}
+actions and sources are optional — only include when relevant. Never include empty arrays.`;
+
+      const claudeResponse = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: messages.slice(-10),
+      });
+
+      const block = claudeResponse.content[0];
+      const responseText = block.type === "text" ? block.text : "";
+      const cleaned = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+
+      res.json(parsed);
+    } catch (err) {
+      console.error("chat error:", err);
+      res.status(500).json({ message: "Chat failed. Please try again." });
+    }
+  });
+
   await seedDatabase();
 
   return httpServer;
+}
+
+// ── Voyage AI embedding helper ──────────────────────────────────────────────
+async function getEmbedding(text: string): Promise<number[]> {
+  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model: "voyage-large-2", input: [text] }),
+  });
+  if (!res.ok) throw new Error(`Voyage AI error: ${res.status}`);
+  const data = await res.json() as { data: Array<{ embedding: number[] }> };
+  return data.data[0].embedding;
+}
+
+// ── Generate and store embeddings for a single episode ───────────────────────
+async function generateAndStoreEmbeddings(episodeId: number) {
+  const episode = await storage.getPodcast(episodeId);
+  if (!episode) return;
+
+  const chunks: Array<{
+    chunkType: string;
+    chunkIndex: number;
+    content: string;
+    timeRef?: string;
+    topic?: string;
+  }> = [];
+
+  chunks.push({
+    chunkType: "description",
+    chunkIndex: 0,
+    content: `Episode: ${episode.title}\n${episode.description}`,
+  });
+
+  const transcripts = episode.transcripts as Array<{ time: string; topic: string; text: string }>;
+  transcripts.forEach((t, i) => {
+    chunks.push({
+      chunkType: "key_moment",
+      chunkIndex: i + 1,
+      content: `[${t.time}] ${t.topic}: ${t.text}`,
+      timeRef: t.time,
+      topic: t.topic,
+    });
+  });
+
+  const texts = chunks.map(c => c.content);
+  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model: "voyage-large-2", input: texts }),
+  });
+  const embData = await res.json() as { data: Array<{ embedding: number[] }> };
+
+  await db.delete(episodeChunks).where(eq(episodeChunks.episodeId, episodeId));
+
+  await db.insert(episodeChunks).values(
+    chunks.map((c, i) => ({
+      episodeId,
+      chunkType: c.chunkType,
+      chunkIndex: c.chunkIndex,
+      content: c.content,
+      timeRef: c.timeRef ?? null,
+      topic: c.topic ?? null,
+      embedding: embData.data[i].embedding,
+    }))
+  );
+
+  console.log(`[Embeddings] Stored ${chunks.length} chunks for episode ${episodeId}`);
+}
+
+// ── pgvector cosine similarity search ───────────────────────────────────────
+async function searchChunks(queryEmbedding: number[], topK = 8): Promise<unknown[]> {
+  const vectorStr = `[${queryEmbedding.join(",")}]`;
+  const results = await db.execute(sql`
+    SELECT
+      ec.id,
+      ec.episode_id,
+      ec.chunk_type,
+      ec.content,
+      ec.time_ref,
+      ec.topic,
+      p.title AS episode_title,
+      1 - (ec.embedding <=> ${vectorStr}::vector) AS similarity
+    FROM episode_chunks ec
+    LEFT JOIN podcasts p ON p.id = ec.episode_id
+    WHERE 1 - (ec.embedding <=> ${vectorStr}::vector) > 0.55
+    ORDER BY ec.embedding <=> ${vectorStr}::vector
+    LIMIT ${topK}
+  `);
+  return results.rows;
 }
 
 async function regenerateQuestions(): Promise<string[]> {

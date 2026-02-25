@@ -1,4 +1,12 @@
-import { pgTable, text, serial, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, jsonb, timestamp, customType } from "drizzle-orm/pg-core";
+
+// pgvector custom type — dimension set to 1024 (BAAI/bge-large-en-v1.5, multilingual-e5-large, voyage-large-2)
+const vector = (name: string, dimensions: number) =>
+  customType<{ data: number[]; driverData: string }>({
+    dataType() { return `vector(${dimensions})`; },
+    toDriver(value: number[]): string { return `[${value.join(',')}]`; },
+    fromDriver(value: string): number[] { return value.slice(1, -1).split(',').map(Number); },
+  })(name);
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -55,4 +63,16 @@ export const subscribers = pgTable("subscribers", {
   email: text("email").notNull().unique(),
   subscribedAt: timestamp("subscribed_at").defaultNow(),
   source: text("source").default("website"),
+});
+
+export const episodeChunks = pgTable("episode_chunks", {
+  id:         serial("id").primaryKey(),
+  episodeId:  integer("episode_id").references(() => podcasts.id, { onDelete: "cascade" }),
+  chunkType:  text("chunk_type").notNull(), // 'description' | 'key_moment' | 'company'
+  chunkIndex: integer("chunk_index").notNull(),
+  content:    text("content").notNull(),
+  timeRef:    text("time_ref"),
+  topic:      text("topic"),
+  embedding:  vector("embedding", 1024),
+  createdAt:  timestamp("created_at").defaultNow(),
 });

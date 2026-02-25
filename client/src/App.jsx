@@ -13,6 +13,7 @@ import Subscribe from "@/pages/Subscribe";
 import Contact from "@/pages/Contact";
 import ComingSoon from "@/pages/ComingSoon";
 import NotFound from "@/pages/NotFound";
+import ChatWidget from "@/components/chat/ChatWidget";
 
 function Router() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <ChatWidget />
         </TooltipProvider>
       </BackofficeProvider>
     </QueryClientProvider>
