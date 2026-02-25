@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BackofficeProvider } from "@/components/backoffice/BackofficeContext";
+import { LanguageProvider } from "@/hooks/use-language";
 
 import Home from "@/pages/Home";
 import Episodes from "@/pages/Episodes";
@@ -37,6 +38,7 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <LanguageProvider>
       <BackofficeProvider>
         <TooltipProvider>
           <Toaster />
@@ -44,6 +46,7 @@ export default function App() {
           <ChatWidget />
         </TooltipProvider>
       </BackofficeProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }
