@@ -9,4 +9,7 @@ vite.config.ts.*
 
 # Windows Zone.Identifier files (WSL artifact)
 *:Zone.Identifier
-*.Zone.Identifier
+*.Zone.Identifierhpc/embeddings_output.json
+hpc/episodes_export.json
+hpc/models/
+hpc/offline_pkgs/
