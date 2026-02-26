@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Chatbot — Complete Process</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222222;
+    --border: #2a2a2a;
+    --border2: #333333;
+    --text: #e8e8e8;
+    --text2: #9a9a9a;
+    --text3: #5a5a5a;
+    --accent: #ff4d00;
+    --accent2: #ff7a40;
+    --accent-dim: rgba(255,77,0,0.12);
+    --accent-dim2: rgba(255,77,0,0.06);
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --purple: #a855f7;
+    --yellow: #eab308;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Sora', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    overflow-y: auto;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .sidebar-logo .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: var(--mono);
+    margin-bottom: 4px;
+  }
+
+  .sidebar-logo .title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .sidebar-section {
+    padding: 0 12px;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-family: var(--mono);
+    padding: 6px 8px 4px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 13px;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+
+  .sidebar-item:hover, .sidebar-item.active {
+    background: var(--accent-dim);
+    color: var(--text);
+  }
+
+  .sidebar-item.active {
+    color: var(--accent2);
+  }
+
+  .sidebar-item .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+  }
+
+  .sidebar-item.active .dot { background: var(--accent); }
+
+  /* Main content */
+  .main {
+    margin-left: 260px;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* Top bar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(15,15,15,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .breadcrumb {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .breadcrumb span { color: var(--text2); }
+
+  .topbar-badges {
+    display: flex;
+    gap: 8px;
+  }
+
+  .badge {
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .badge-orange { background: var(--accent-dim); color: var(--accent2); border: 1px solid rgba(255,77,0,0.3); }
+  .badge-green { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+  .badge-blue { background: rgba(59,130,246,0.1); color: var(--blue); border: 1px solid rgba(59,130,246,0.25); }
+  .badge-purple { background: rgba(168,85,247,0.1); color: var(--purple); border: 1px solid rgba(168,85,247,0.25); }
+
+  /* Page content */
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 56px 48px 120px;
+  }
+
+  /* Hero */
+  .hero {
+    margin-bottom: 56px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .hero h1 .accent { color: var(--accent); }
+
+  .hero-desc {
+    font-size: 16px;
+    color: var(--text2);
+    max-width: 600px;
+    line-height: 1.7;
+    margin-bottom: 24px;
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  .meta-item .label { color: var(--text2); }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 24px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .callout-info { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); }
+  .callout-warn { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); }
+  .callout-success { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); }
+  .callout-accent { background: var(--accent-dim); border: 1px solid rgba(255,77,0,0.25); }
+
+  .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .callout-text { font-size: 14px; line-height: 1.65; }
+  .callout-info .callout-text { color: #93c5fd; }
+  .callout-warn .callout-text { color: #fde047; }
+  .callout-success .callout-text { color: #86efac; }
+  .callout-accent .callout-text { color: var(--accent2); }
+
+  /* Sections */
+  .section {
+    margin-bottom: 56px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-number {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid rgba(255,77,0,0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .section h2 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .section h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section h3::before {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .section p {
+    color: var(--text2);
+    margin-bottom: 12px;
+    font-size: 14px;
+    line-height: 1.75;
+  }
+
+  /* Code blocks */
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 16px 0;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .code-lang {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .code-dots {
+    display: flex;
+    gap: 5px;
+  }
+
+  .code-dots span {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .code-dots .red { background: #ff5f56; }
+  .code-dots .yellow { background: #ffbd2e; }
+  .code-dots .green { background: #27c93f; }
+
+  .code-block pre {
+    padding: 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: #d4d4d4;
+  }
+
+  .code-block code {
+    font-family: var(--mono);
+  }
+
+  /* Inline code */
+  code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--accent2);
+  }
+
+  /* Flow diagram */
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 0;
+    flex-wrap: nowrap;
+  }
+
+  .flow-node {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-align: center;
+    min-width: 120px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .flow-node.primary {
+    border-color: rgba(255,77,0,0.4);
+    background: var(--accent-dim2);
+  }
+
+  .flow-node.secondary {
+    border-color: rgba(59,130,246,0.35);
+    background: rgba(59,130,246,0.06);
+  }
+
+  .flow-node.tertiary {
+    border-color: rgba(168,85,247,0.35);
+    background: rgba(168,85,247,0.06);
+  }
+
+  .flow-node.success {
+    border-color: rgba(34,197,94,0.35);
+    background: rgba(34,197,94,0.06);
+  }
+
+  .flow-node .node-icon { font-size: 20px; margin-bottom: 6px; display: block; }
+  .flow-node .node-title { font-size: 12px; font-weight: 600; color: var(--text); }
+  .flow-node .node-sub { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+
+  .flow-arrow {
+    color: var(--text3);
+    font-size: 18px;
+    padding: 0 8px;
+    flex-shrink: 0;
+  }
+
+  .flow-vertical {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .flow-down-arrow {
+    font-size: 20px;
+    color: var(--text3);
+    padding: 4px 0;
+    text-align: center;
+  }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 16px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    background: var(--surface2);
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    font-family: var(--mono);
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  td code { font-size: 11px; }
+
+  .td-highlight { color: var(--text); font-weight: 500; }
+  .td-accent { color: var(--accent2); font-family: var(--mono); font-size: 12px; }
+  .td-green { color: var(--green); }
+  .td-blue { color: var(--blue); }
+  .td-purple { color: var(--purple); }
+
+  /* Steps */
+  .steps {
+    counter-reset: step;
+    margin: 16px 0;
+  }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: 1px solid rgba(255,77,0,0.4);
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .step-content { flex: 1; }
+  .step-title { font-weight: 600; color: var(--text); font-size: 14px; margin-bottom: 4px; }
+  .step-desc { color: var(--text2); font-size: 13px; line-height: 1.65; }
+
+  /* Two-column */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+
+  .col-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .col-card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .col-card p { font-size: 13px; color: var(--text2); line-height: 1.65; margin-bottom: 8px; }
+  .col-card p:last-child { margin-bottom: 0; }
+
+  .col-card.orange { border-color: rgba(255,77,0,0.3); background: var(--accent-dim2); }
+  .col-card.blue { border-color: rgba(59,130,246,0.25); background: rgba(59,130,246,0.04); }
+
+  /* Highlight box */
+  .highlight-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 16px 0;
+  }
+
+  .highlight-box h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .highlight-box p {
+    font-size: 13px;
+    color: var(--text2);
+    margin: 0;
+    line-height: 1.65;
+  }
+
+  /* Toggle/Details */
+  details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 12px 0;
+    overflow: hidden;
+  }
+
+  summary {
+    padding: 14px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    user-select: none;
+  }
+
+  summary::-webkit-details-marker { display: none; }
+
+  summary::before {
+    content: '▶';
+    font-size: 9px;
+    color: var(--text3);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  details[open] summary::before { transform: rotate(90deg); }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+
+  .details-content {
+    padding: 16px;
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 40px 0;
+  }
+
+  /* Tags */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+  }
+
+  .tag {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  .tag-orange { color: var(--accent2); border-color: rgba(255,77,0,0.3); background: var(--accent-dim); }
+  .tag-blue { color: #93c5fd; border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.08); }
+  .tag-purple { color: #d8b4fe; border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.08); }
+  .tag-green { color: #86efac; border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+  .tag-yellow { color: #fde047; border-color: rgba(234,179,8,0.3); background: rgba(234,179,8,0.08); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+    .page { padding: 40px 24px 80px; }
+    .two-col { grid-template-columns: 1fr; }
+    .topbar { padding: 12px 24px; }
+    .flow-row { flex-wrap: wrap; justify-content: center; }
+  }
+
+  /* Syntax highlight colors */
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .cmt { color: #546e7a; font-style: italic; }
+  .fn { color: #82aaff; }
+  .num { color: #f78c6c; }
+  .var { color: #f07178; }
+  .op { color: #89ddff; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="label">MAKEIT.TECH</div>
+    <div class="title">RAG Chatbot Docs</div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Overview</div>
+    <a href="#what-is-it" class="sidebar-item active">
+      <span class="dot"></span> What is it?
+    </a>
+    <a href="#architecture" class="sidebar-item">
+      <span class="dot"></span> Architecture
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Database</div>
+    <a href="#episode-chunks" class="sidebar-item">
+      <span class="dot"></span> episode_chunks table
+    </a>
+    <a href="#embedding-models" class="sidebar-item">
+      <span class="dot"></span> Embedding models
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Pipelines</div>
+    <a href="#voyage-pipeline" class="sidebar-item">
+      <span class="dot"></span> Voyage AI (automatic)
+    </a>
+    <a href="#hpc-pipeline" class="sidebar-item">
+      <span class="dot"></span> HPC Batch (MareNostrum)
+    </a>
+    <a href="#when-to-use" class="sidebar-item">
+      <span class="dot"></span> When to use which
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Maintenance</div>
+    <a href="#company-knowledge" class="sidebar-item">
+      <span class="dot"></span> Company knowledge
+    </a>
+    <a href="#new-episodes" class="sidebar-item">
+      <span class="dot"></span> Adding episodes
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Technical</div>
+    <a href="#system-prompt" class="sidebar-item">
+      <span class="dot"></span> System prompt
+    </a>
+    <a href="#response-format" class="sidebar-item">
+      <span class="dot"></span> Response format
+    </a>
+    <a href="#vector-search" class="sidebar-item">
+      <span class="dot"></span> Vector search
+    </a>
+    <a href="#troubleshooting" class="sidebar-item">
+      <span class="dot"></span> Troubleshooting
+    </a>
+  </div>
+</nav>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="breadcrumb">
+      MAKEIT.TECH <span>›</span> Media Navigator <span>›</span> RAG Chatbot
+    </div>
+    <div class="topbar-badges">
+      <span class="badge badge-orange">voyage-3</span>
+      <span class="badge badge-blue">pgvector</span>
+      <span class="badge badge-purple">Claude Sonnet 4.6</span>
+      <span class="badge badge-green">1024 dims</span>
+    </div>
+  </div>
+
+  <!-- Page -->
+  <div class="page">
+
+    <!-- Hero -->
+    <div class="hero" id="what-is-it">
+      <span class="hero-icon">💬</span>
+      <h1>RAG Chatbot<br><span class="accent">Complete Process</span></h1>
+      <p class="hero-desc">
+        How we built a semantic search chatbot that knows everything about MAKEIT OR BREAKIT — every episode, every timestamp, every topic — using pgvector, Voyage AI, MareNostrum HPC, and Claude Sonnet 4.6.
+      </p>
+      <div class="hero-meta">
+        <div class="meta-item">📅 <span class="label">2026-02-26</span></div>
+        <div class="meta-item">🌿 <span class="label">feature/rag-chatbot</span></div>
+        <div class="meta-item">🔢 <span class="label">33 chunks embedded</span></div>
+        <div class="meta-item">📐 <span class="label">1024 dimensions</span></div>
+      </div>
+    </div>
+
+    <div class="callout callout-accent">
+      <span class="callout-icon">🎯</span>
+      <div class="callout-text">
+        <strong>RAG = Retrieval-Augmented Generation.</strong> Instead of asking Claude to answer from memory, we first search our database for the most relevant content, then send that content to Claude as context. The result: accurate, cited answers about specific episodes and timestamps.
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section" id="architecture">
+      <div class="section-header">
+        <span class="section-number">01</span>
+        <h2>Architecture</h2>
+      </div>
+
+      <p>Every chat message goes through this exact pipeline:</p>
+
+      <div class="flow">
+        <div class="flow-vertical">
+          <div class="flow-node primary">
+            <span class="node-icon">💬</span>
+            <div class="node-title">User Message</div>
+            <div class="node-sub">max 100 words</div>
+          </div>
+          <div class="flow-down-arrow">↓</div>
+          <div class="flow-node secondary">
+            <span class="node-icon">🚀</span>
+            <div class="node-title">POST /api/chat</div>
+            <div class="node-sub">last 10 messages sent</div>
+          </div>
+          <div class="flow-down-arrow">↓</div>
+          <div class="flow-row" style="gap:16px">
+            <div class="flow-node secondary" style="min-width:150px">
+              <span class="node-icon">🌊</span>
+              <div class="node-title">Voyage AI</div>
+              <div class="node-sub">voyage-3 → 1024 floats</div>
+            </div>
+            <div style="font-size:24px;color:#5a5a5a;align-self:center">→</div>
+            <div class="flow-node tertiary" style="min-width:150px">
+              <span class="node-icon">🗄️</span>
+              <div class="node-title">pgvector Search</div>
+              <div class="node-sub">cosine, threshold 0.35, top 12</div>
+            </div>
+          </div>
+          <div class="flow-down-arrow">↓</div>
+          <div class="flow-node primary">
+            <span class="node-icon">🧠</span>
+            <div class="node-title">Claude Sonnet 4.6</div>
+            <div class="node-sub">company knowledge + retrieved chunks</div>
+          </div>
+          <div class="flow-down-arrow">↓</div>
+          <div class="flow-node success">
+            <span class="node-icon">✅</span>
+            <div class="node-title">JSON Response</div>
+            <div class="node-sub">message + actions + sources</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ️</span>
+        <div class="callout-text">
+          The entire pipeline runs in ~2–4 seconds. Voyage AI embedding takes ~200ms, pgvector search ~50ms, Claude generation ~1.5–3s.
+        </div>
+      </div>
+    </div>
+
+    <!-- Episode Chunks Table -->
+    <div class="section" id="episode-chunks">
+      <div class="section-header">
+        <span class="section-number">02</span>
+        <h2>The episode_chunks Table</h2>
+      </div>
+
+      <p>All knowledge is stored as vector embeddings in Neon (PostgreSQL + pgvector). One row per semantic unit of content.</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL — Schema</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code><span class="kw">CREATE TABLE</span> episode_chunks (
+  id          <span class="fn">SERIAL</span> <span class="kw">PRIMARY KEY</span>,
+  episode_id  <span class="fn">INTEGER</span> <span class="kw">REFERENCES</span> podcasts(id) <span class="kw">ON DELETE CASCADE</span>,
+  chunk_type  <span class="fn">TEXT</span>,      <span class="cmt">-- "description" | "key_moment" | "company"</span>
+  chunk_index <span class="fn">INTEGER</span>,   <span class="cmt">-- 0-based position within episode</span>
+  content     <span class="fn">TEXT</span>,      <span class="cmt">-- the raw text that was embedded</span>
+  time_ref    <span class="fn">TEXT</span>,      <span class="cmt">-- MM:SS timestamp (key_moment only)</span>
+  topic       <span class="fn">TEXT</span>,      <span class="cmt">-- topic label (key_moment only)</span>
+  embedding   vector(<span class="num">1024</span>), <span class="cmt">-- pgvector column, cosine similarity</span>
+  created_at  <span class="fn">TIMESTAMP</span>
+);
+
+<span class="cmt">-- Create HNSW index for fast approximate nearest-neighbour search</span>
+<span class="kw">CREATE INDEX ON</span> episode_chunks
+  <span class="kw">USING</span> hnsw (embedding vector_cosine_ops);</code></pre>
+      </div>
+
+      <h3>Chunk Types</h3>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>episode_id</th>
+              <th>Content format</th>
+              <th>Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag tag-orange">description</span></td>
+              <td class="td-green">FK to episode</td>
+              <td><code>"Episode: {title}\n{description}"</code></td>
+              <td class="td-blue">"Episode: Investments\nIn this episode..."</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-blue">key_moment</span></td>
+              <td class="td-green">FK to episode</td>
+              <td><code>"[MM:SS] {topic}: {text}"</code></td>
+              <td class="td-blue">"[05:13] Startup quality: Discussion focuses..."</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-purple">company</span></td>
+              <td class="td-accent">NULL</td>
+              <td>Paragraph from company.ts</td>
+              <td class="td-blue">"MAKEIT OR BREAKIT is a Portuguese podcast..."</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-text">
+          Company chunks have <code>episode_id = NULL</code>. They are NOT created automatically when you add episodes — they require either the HPC batch pipeline or a manual SQL insert.
+        </div>
+      </div>
+    </div>
+
+    <!-- Embedding Models -->
+    <div class="section" id="embedding-models">
+      <div class="section-header">
+        <span class="section-number">03</span>
+        <h2>Embedding Models</h2>
+      </div>
+
+      <p>Two different models are used across the two pipelines. Both produce <strong>1024 dimensions</strong> — this is critical for them to coexist in the same <code>vector(1024)</code> column.</p>
+
+      <div class="two-col">
+        <div class="col-card orange">
+          <h4>🖥️ HPC — BAAI/bge-large-en-v1.5</h4>
+          <p><strong>Used for:</strong> Bulk batch embedding on MareNostrum. Covers all episodes + company knowledge chunks.</p>
+          <p><strong>Dimensions:</strong> 1024 · L2-normalised</p>
+          <p><strong>Runs:</strong> On CPU, offline (no internet on HPC login nodes)</p>
+          <p><strong>Size:</strong> ~1.3GB model weights</p>
+        </div>
+        <div class="col-card blue">
+          <h4>🌊 Voyage AI — voyage-3</h4>
+          <p><strong>Used for:</strong> Real-time embedding of new/updated episodes. Also used at query time to embed the user's chat message.</p>
+          <p><strong>Dimensions:</strong> 1024</p>
+          <p><strong>Runs:</strong> Via API call (VOYAGE_API_KEY required)</p>
+          <p><strong>Speed:</strong> ~200ms per batch</p>
+        </div>
+      </div>
+
+      <div class="highlight-box">
+        <h4>Why 1024 dimensions must match</h4>
+        <p>The pgvector column is defined as <code>vector(1024)</code>. If you insert an embedding with 768 or 1536 dimensions, Postgres will throw a "different vector dimensions" error. Both models were chosen specifically because they produce 1024-dimensional vectors, allowing them to coexist and be compared in the same cosine similarity search.</p>
+      </div>
+    </div>
+
+    <!-- Voyage Pipeline -->
+    <div class="section" id="voyage-pipeline">
+      <div class="section-header">
+        <span class="section-number">04</span>
+        <h2>Pipeline 1 — Voyage AI (Automatic)</h2>
+      </div>
+
+      <p>This pipeline runs automatically. No manual steps required.</p>
+
+      <div class="callout callout-success">
+        <span class="callout-icon">✅</span>
+        <div class="callout-text">
+          Every time you add or update an episode via the backoffice, Voyage AI embeddings are generated within ~5 seconds. The chatbot immediately knows about the new episode.
+        </div>
+      </div>
+
+      <h3>Trigger</h3>
+      <p><code>POST /api/podcasts</code> or <code>PUT /api/podcasts/:id</code> — both call <code>generateAndStoreEmbeddings(episodeId)</code> as a fire-and-forget async function.</p>
+
+      <h3>What happens</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Fetch the episode</div>
+            <div class="step-desc">Server fetches the full episode (title, description, transcripts) from Neon.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Build chunks</div>
+            <div class="step-desc">1 description chunk (<code>"Episode: title\ndescription"</code>) + N key_moment chunks (<code>"[MM:SS] topic: text"</code>), one per transcript entry.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Embed with Voyage AI</div>
+            <div class="step-desc">All chunk texts sent in a single batch to <code>POST https://api.voyageai.com/v1/embeddings</code> with <code>model: "voyage-3"</code>. Returns 1024-float vectors.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Delete old rows</div>
+            <div class="step-desc">All existing <code>episode_chunks</code> rows for this <code>episodeId</code> are deleted (handles both create and re-embed on update).</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Insert new rows</div>
+            <div class="step-desc">New rows inserted into <code>episode_chunks</code> with embeddings. The chatbot now has full knowledge of this episode.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-text">
+          <strong>What this does NOT cover:</strong> Company knowledge chunks (<code>chunk_type = "company"</code>, <code>episode_id = NULL</code>). These are only created via the HPC pipeline or a manual SQL insert. The system prompt always injects the full <code>company.ts</code> string regardless, so the chatbot still has company context — but it won't be searchable via pgvector.
+        </div>
+      </div>
+    </div>
+
+    <!-- HPC Pipeline -->
+    <div class="section" id="hpc-pipeline">
+      <div class="section-header">
+        <span class="section-number">05</span>
+        <h2>Pipeline 2 — HPC Batch (MareNostrum)</h2>
+      </div>
+
+      <p>Used for bulk re-embedding all episodes and company knowledge at once, using the open-source <code>BAAI/bge-large-en-v1.5</code> model running locally on MareNostrum's CPU nodes — no internet access required.</p>
+
+      <div class="tags">
+        <span class="tag tag-orange">MareNostrum 5</span>
+        <span class="tag tag-blue">SLURM job</span>
+        <span class="tag tag-purple">Python 3.10</span>
+        <span class="tag tag-green">offline install</span>
+        <span class="tag tag-yellow">partition: gpp</span>
+      </div>
+
+      <h3>When to use HPC</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Situation</th><th>Use HPC?</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Initial setup — embedding all existing episodes</td><td class="td-green">Yes</td></tr>
+            <tr><td>Updating company knowledge significantly</td><td class="td-green">Yes</td></tr>
+            <tr><td>Adding a new episode via backoffice</td><td class="td-accent">No — Voyage AI handles it</td></tr>
+            <tr><td>Switching to a different embedding model</td><td class="td-green">Yes</td></tr>
+            <tr><td>20+ new episodes accumulated, want consistency</td><td class="td-blue">Optional</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>MareNostrum Credentials</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SSH Config</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code>Host mn5
+  HostName mn1.bsc.es
+  User mate464846
+
+ssh mn5  <span class="cmt"># connects to mate464846@mn1.bsc.es</span>
+
+<span class="cmt"># Account:   eporaif03</span>
+<span class="cmt"># Partition: gpp</span>
+<span class="cmt"># QOS:       gp_debug</span></code></pre>
+      </div>
+
+      <h3>Directory structure on MareNostrum</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Shell</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code>~/podcast-embed/
+├── embed_episodes.py        <span class="cmt"># Python embedding script</span>
+├── embed_episodes.slurm     <span class="cmt"># SLURM job definition</span>
+├── episodes_export.json     <span class="cmt"># Input — copied from local</span>
+├── embeddings_output.json   <span class="cmt"># Output — copied to local</span>
+├── models/
+│   └── bge-large-en-v1.5/  <span class="cmt"># Model weights (1.3GB, pre-downloaded)</span>
+└── offline_pkgs/            <span class="cmt"># Python .whl files for offline install</span>
+
+~/venvs/embed/               <span class="cmt"># Python 3.10 virtual environment</span></code></pre>
+      </div>
+
+      <h3>Step-by-step workflow</h3>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Export chunks from Neon (local WSL)</div>
+            <div class="step-desc">Queries all episodes and builds the chunk JSON. Includes description chunks, key_moment chunks, and company paragraph chunks.</div>
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><span class="code-lang">Bash</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code>cd ~/make-it.tech/PodCasts/Media-Navigator
+npx tsx --env-file=.env hpc/export_chunks.ts
+<span class="cmt"># Output: hpc/episodes_export.json</span></code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Copy to MareNostrum</div>
+            <div class="step-desc">Transfer the export file via SCP.</div>
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><span class="code-lang">Bash</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code>scp hpc/episodes_export.json mn5:~/podcast-embed/</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Submit SLURM job on MareNostrum</div>
+            <div class="step-desc">SSH in, activate the venv, and submit the job. The SLURM scheduler runs it on a compute node.</div>
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><span class="code-lang">Bash</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code>ssh mn5
+cd ~/podcast-embed
+module load python/3.10.15-gcc
+source ~/venvs/embed/bin/activate
+sbatch embed_episodes.slurm
+
+<span class="cmt"># Monitor progress</span>
+squeue -u mate464846          <span class="cmt"># PD=pending, R=running</span>
+cat embed_*.out               <span class="cmt"># stdout log</span>
+cat embed_*.err               <span class="cmt"># stderr + errors</span></code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Copy results back (local WSL)</div>
+            <div class="step-desc">Once the job completes (disappears from squeue), copy the output file back.</div>
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><span class="code-lang">Bash</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code>scp mn5:~/podcast-embed/embeddings_output.json hpc/embeddings_output.json</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Import into Neon</div>
+            <div class="step-desc">Clears the entire <code>episode_chunks</code> table and re-inserts all rows in batches of 100.</div>
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><span class="code-lang">Bash</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code>npx tsx --env-file=.env hpc/import_embeddings.ts
+<span class="cmt"># Output: "Inserted batch X/Y" + "Import complete."</span></code></pre>
+            </div>
+            <div class="callout callout-warn" style="margin-top:10px">
+              <span class="callout-icon">⚠️</span>
+              <div class="callout-text">This deletes ALL existing rows before inserting. After import, all chunks use the HPC model. New episodes added later will use Voyage AI automatically — both coexist fine (same 1024 dimensions).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3>SLURM Job Parameters</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">embed_episodes.slurm</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code><span class="cmt">#!/bin/bash</span>
+<span class="kw">#SBATCH</span> --job-name=podcast-embed
+<span class="kw">#SBATCH</span> --account=eporaif03
+<span class="kw">#SBATCH</span> --partition=gpp
+<span class="kw">#SBATCH</span> --qos=gp_debug
+<span class="kw">#SBATCH</span> --time=00:30:00
+<span class="kw">#SBATCH</span> --ntasks=1
+<span class="kw">#SBATCH</span> --cpus-per-task=8
+
+module purge
+module load intel/2023.2.0
+module load impi/2021.10.0
+module load mkl/2023.2.0
+module load python/3.10.15-gcc
+
+VENV_PATH=<span class="str">"$HOME/venvs/embed"</span>
+PROJECT_ROOT=<span class="str">"$HOME/podcast-embed"</span>
+
+source $VENV_PATH/bin/activate
+
+$VENV_PATH/bin/python $PROJECT_ROOT/embed_episodes.py \
+  --input $PROJECT_ROOT/episodes_export.json \
+  --output $PROJECT_ROOT/embeddings_output.json \
+  --model $PROJECT_ROOT/models/bge-large-en-v1.5</code></pre>
+      </div>
+    </div>
+
+    <!-- When to use which -->
+    <div class="section" id="when-to-use">
+      <div class="section-header">
+        <span class="section-number">06</span>
+        <h2>When to Use Which Pipeline</h2>
+      </div>
+
+      <div class="two-col">
+        <div class="col-card orange">
+          <h4>🖥️ Use HPC when...</h4>
+          <p>• Updating <code>server/knowledge/company.ts</code> significantly</p>
+          <p>• Doing an initial bulk embed of all episodes</p>
+          <p>• Switching to a different embedding model</p>
+          <p>• Want to re-embed 20+ episodes with a consistent model</p>
+        </div>
+        <div class="col-card blue">
+          <h4>🌊 Use Voyage AI (automatic) when...</h4>
+          <p>• Adding a new episode via backoffice</p>
+          <p>• Editing an existing episode's content</p>
+          <p>• Small company knowledge updates (use manual SQL)</p>
+          <p>• You don't have MareNostrum access</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Knowledge -->
+    <div class="section" id="company-knowledge">
+      <div class="section-header">
+        <span class="section-number">07</span>
+        <h2>Updating Company Knowledge</h2>
+      </div>
+
+      <p>Company knowledge lives in <code>server/knowledge/company.ts</code> as a single exported string. It is injected into every chat system prompt AND split into paragraph chunks in <code>episode_chunks</code>.</p>
+
+      <h3>What's in it</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Topic</th><th>Content</th></tr></thead>
+          <tbody>
+            <tr><td class="td-highlight">About the show</td><td>MAKEIT OR BREAKIT — Portuguese podcast about tech, hardware, entrepreneurship</td></tr>
+            <tr><td class="td-highlight">Host</td><td>Francisco Mendes, founder of MAKEIT Product R&D</td></tr>
+            <tr><td class="td-highlight">About MAKEIT</td><td>Product R&D company, hardware/PCB/software/UX, Portugal</td></tr>
+            <tr><td class="td-highlight">Topics covered</td><td>Hardware, MVPs, AI, fundraising, career paths, innovation</td></tr>
+            <tr><td class="td-highlight">Contact & social</td><td>make-it.tech, contact@make-it.tech, /contact, /subscribe</td></tr>
+            <tr><td class="td-highlight">Guest applications</td><td>How to apply to be on the show</td></tr>
+            <tr><td class="td-highlight">Platform features</td><td>PCB search, episode grid, chat widget, subscribe page</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Option A — Full update via HPC</h3>
+      <p>Edit <code>server/knowledge/company.ts</code>, deploy, then run the full HPC pipeline. Best for major updates.</p>
+
+      <h3>Option B — Manual insert without HPC</h3>
+      <p>For 1–3 new paragraphs when you don't have MareNostrum access:</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Get the embedding via Voyage AI API</div>
+            <div class="code-block" style="margin-top:8px">
+              <div class="code-header"><span class="code-lang">Bash</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code>curl https://api.voyageai.com/v1/embeddings \
+  -H <span class="str">"Authorization: Bearer $VOYAGE_API_KEY"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"model":"voyage-3","input":["Your new paragraph here."]}'</span>
+<span class="cmt"># Returns: { "data": [{ "embedding": [0.023, -0.041, ...] }] }</span></code></pre>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Insert into Neon SQL editor</div>
+            <div class="code-block" style="margin-top:8px">
+              <div class="code-header"><span class="code-lang">SQL</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+              <pre><code><span class="kw">INSERT INTO</span> episode_chunks
+  (episode_id, chunk_type, chunk_index, content, embedding)
+<span class="kw">VALUES</span> (
+  <span class="kw">NULL</span>,
+  <span class="str">'company'</span>,
+  (<span class="kw">SELECT</span> <span class="fn">COALESCE</span>(<span class="fn">MAX</span>(chunk_index), -<span class="num">1</span>) + <span class="num">1</span>
+   <span class="kw">FROM</span> episode_chunks
+   <span class="kw">WHERE</span> chunk_type = <span class="str">'company'</span>),
+  <span class="str">'Your new company knowledge paragraph.'</span>,
+  <span class="str">'[0.023, -0.041, ...]'</span>::vector
+);</code></pre>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-content">
+            <div class="step-title">Deploy the updated company.ts</div>
+            <div class="step-desc">The system prompt update takes effect immediately after deploy — Claude gets the new knowledge even before the pgvector insert.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New episodes -->
+    <div class="section" id="new-episodes">
+      <div class="section-header">
+        <span class="section-number">08</span>
+        <h2>Adding New Episodes</h2>
+      </div>
+
+      <div class="callout callout-success">
+        <span class="callout-icon">🎉</span>
+        <div class="callout-text">
+          <strong>You don't need to do anything.</strong> When you add an episode via the backoffice, Voyage AI embeddings are generated automatically within ~5 seconds. The chatbot immediately knows about the new episode.
+        </div>
+      </div>
+
+      <h3>After adding many episodes</h3>
+      <p>When you've accumulated 20+ new episodes since the last HPC run, consider running a full HPC batch to ensure all embeddings are consistent (same model, same normalisation). This is <em>optional</em> — Voyage AI embeddings are fully compatible with HPC embeddings.</p>
+
+      <h3>After deleting an episode</h3>
+      <p>The <code>episode_chunks</code> rows are deleted automatically via <code>ON DELETE CASCADE</code> on the foreign key. No manual cleanup needed.</p>
+    </div>
+
+    <!-- System Prompt -->
+    <div class="section" id="system-prompt">
+      <div class="section-header">
+        <span class="section-number">09</span>
+        <h2>Chat System Prompt</h2>
+      </div>
+
+      <p>Every chat request sends this three-part system prompt to Claude:</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">System Prompt Structure</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code><span class="cmt">// Part 1 — Always present</span>
+You are the MAKEIT OR BREAKIT podcast assistant.
+
+<span class="str">COMPANY KNOWLEDGE:</span>
+{companyKnowledge}  <span class="cmt">// full server/knowledge/company.ts string</span>
+
+<span class="cmt">// Part 2 — Retrieved from pgvector (dynamic per query)</span>
+<span class="str">RELEVANT CONTENT FROM OUR KNOWLEDGE BASE:</span>
+[Episode: <span class="str">"Investments"</span> @ <span class="num">05:13</span> — Startup quality]
+Discussion focuses on the quantity and quality of startups...
+
+[Company info]
+MAKEIT OR BREAKIT is a Portuguese podcast about technology...
+
+<span class="cmt">// Part 3 — Behaviour rules (always present)</span>
+Rules:
+- Cite episode title and timestamp when referencing episode content
+- Always respond in the same language the user writes in (EN or PT)
+- Return ONLY valid JSON: { <span class="str">"message"</span>, <span class="str">"actions?"</span>, <span class="str">"sources?"</span> }
+- Never make up episode content
+- If you don<span class="str">'t know, say so clearly</span></code></pre>
+      </div>
+    </div>
+
+    <!-- Response Format -->
+    <div class="section" id="response-format">
+      <div class="section-header">
+        <span class="section-number">10</span>
+        <h2>Response Format</h2>
+      </div>
+
+      <p>Claude always returns structured JSON. The server parses it and returns to the client. If parsing fails (Claude returned plain text), the server wraps it in <code>{"message": responseText}</code>.</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON Response</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code>{
+  <span class="str">"message"</span>: <span class="str">"At 72:18, the guest reveals a bold electric motorcycle venture..."</span>,
+
+  <span class="str">"actions"</span>: [                      <span class="cmt">// optional — relevant links</span>
+    { <span class="str">"label"</span>: <span class="str">"Watch Episode"</span>, <span class="str">"href"</span>: <span class="str">"/podcasts/1?t=72:18"</span> },
+    { <span class="str">"label"</span>: <span class="str">"Apply as a Guest"</span>, <span class="str">"href"</span>: <span class="str">"/contact"</span> }
+  ],
+
+  <span class="str">"sources"</span>: [                      <span class="cmt">// optional — citations</span>
+    {
+      <span class="str">"episodeTitle"</span>: <span class="str">"Investments"</span>,
+      <span class="str">"timeRef"</span>: <span class="str">"72:18"</span>,
+      <span class="str">"topic"</span>: <span class="str">"Electric motorcycle project Portugal"</span>
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <h3>Word limits</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Input</th><th>Limit</th><th>Enforcement</th><th>Behaviour</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>PCB search query</td>
+              <td class="td-accent">20 words</td>
+              <td>Client-side</td>
+              <td>Live counter, button disabled when over</td>
+            </tr>
+            <tr>
+              <td>Chat message</td>
+              <td class="td-accent">100 words</td>
+              <td>Client-side</td>
+              <td>Live counter, input turns red, send blocked</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Vector Search -->
+    <div class="section" id="vector-search">
+      <div class="section-header">
+        <span class="section-number">11</span>
+        <h2>Vector Search</h2>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL — searchChunks()</span>
+          <div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div>
+        </div>
+        <pre><code><span class="kw">SELECT</span> ec.*, p.title <span class="kw">AS</span> episode_title,
+  <span class="num">1</span> - (ec.embedding &lt;=&gt; $vector::vector) <span class="kw">AS</span> similarity
+<span class="kw">FROM</span> episode_chunks ec
+<span class="kw">LEFT JOIN</span> podcasts p <span class="kw">ON</span> p.id = ec.episode_id
+<span class="kw">WHERE</span> <span class="num">1</span> - (ec.embedding &lt;=&gt; $vector::vector) > <span class="num">0.35</span>
+<span class="kw">ORDER BY</span> ec.embedding &lt;=&gt; $vector::vector
+<span class="kw">LIMIT</span> <span class="num">12</span></code></pre>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Distance metric</td>
+              <td class="td-accent">&lt;=&gt; (cosine)</td>
+              <td>Both models use L2-normalised vectors — cosine = dot product</td>
+            </tr>
+            <tr>
+              <td>Similarity threshold</td>
+              <td class="td-accent">0.35</td>
+              <td>Low — broad recall. Raise to 0.5 for more precise results</td>
+            </tr>
+            <tr>
+              <td>Top-K</td>
+              <td class="td-accent">12</td>
+              <td>Max chunks sent to Claude as context</td>
+            </tr>
+            <tr>
+              <td>Index type</td>
+              <td class="td-accent">HNSW</td>
+              <td>Approximate nearest-neighbour — fast even at scale</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Troubleshooting -->
+    <div class="section" id="troubleshooting">
+      <div class="section-header">
+        <span class="section-number">12</span>
+        <h2>Troubleshooting</h2>
+      </div>
+
+      <details>
+        <summary>❌ "different vector dimensions 1024 and 1536"</summary>
+        <div class="details-content">
+          <p>The query embedding has a different dimension than stored embeddings. Check that <code>getEmbedding()</code> and <code>generateAndStoreEmbeddings()</code> in <code>routes.ts</code> both use <code>voyage-3</code> (1024 dims), NOT <code>voyage-large-2</code> (1536 dims).</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Fix</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+            <pre><code>sed -i "s/voyage-large-2/voyage-3/g" server/routes.ts</code></pre>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>🤷 Chatbot says "I don't have information about that"</summary>
+        <div class="details-content">
+          <p>Either the topic isn't in any episode, or the similarity threshold is too high. Try:</p>
+          <p>1. Lower threshold from 0.35 to 0.25 in <code>searchChunks()</code></p>
+          <p>2. Check that the topic is covered in episode key moments</p>
+          <p>3. Check that company knowledge covers this topic</p>
+          <p>4. Verify chunks exist: <code>SELECT COUNT(*) FROM episode_chunks;</code> in Neon SQL editor</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>💥 HPC job fails immediately (&lt;10 seconds)</summary>
+        <div class="details-content">
+          <p>Run <code>cat embed_*.err</code> on MareNostrum. Common causes:</p>
+          <p><strong>Python module not loaded:</strong> Run <code>module load python/3.10.15-gcc</code> before activating venv.</p>
+          <p><strong>Model not found:</strong> Check path in <code>embed_episodes.slurm</code> points to <code>~/podcast-embed/models/bge-large-en-v1.5</code></p>
+          <p><strong>Corrupted venv:</strong></p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Fix</span><div class="code-dots"><span class="red"></span><span class="yellow"></span><span class="green"></span></div></div>
+            <pre><code>module load python/3.10.15-gcc
+rm -rf ~/venvs/embed
+python -m venv ~/venvs/embed
+source ~/venvs/embed/bin/activate
+pip install --no-index --find-links=offline_pkgs \
+  sentence-transformers torch numpy ...</code></pre>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>🌊 Voyage AI embeddings not appearing after adding episode</summary>
+        <div class="details-content">
+          <p>The embedding is fire-and-forget — check server logs for errors containing <code>generateAndStoreEmbeddings</code>. Most likely cause: invalid or missing <code>VOYAGE_API_KEY</code>.</p>
+          <p>Check Neon: <code>SELECT * FROM episode_chunks WHERE episode_id = YOUR_ID;</code></p>
+        </div>
+      </details>
+
+      <details>
+        <summary>🔤 Chat returning plain text instead of JSON</summary>
+        <div class="details-content">
+          <p>Claude occasionally returns plain text for complex queries. The server has a fallback that wraps it: <code>{"message": responseText}</code>. If it's causing 500 errors, check the JSON parsing in <code>POST /api/chat</code> in <code>routes.ts</code> — it should use a try/catch with fallback.</p>
+        </div>
+      </details>
+    </div>
+
+    <!-- File Reference -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">13</span>
+        <h2>File Reference</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="td-accent">server/routes.ts</td><td><code>POST /api/chat</code>, <code>getEmbedding()</code>, <code>searchChunks()</code>, <code>generateAndStoreEmbeddings()</code></td></tr>
+            <tr><td class="td-accent">server/knowledge/company.ts</td><td>Company and show knowledge string — injected into every chat prompt</td></tr>
+            <tr><td class="td-accent">shared/schema.ts</td><td><code>episode_chunks</code> table definition with custom <code>vector</code> type</td></tr>
+            <tr><td class="td-accent">client/src/components/chat/ChatWidget.jsx</td><td>Chat UI — draggable, word limit, message + action + source rendering</td></tr>
+            <tr><td class="td-accent">client/src/hooks/use-chat.js</td><td>Chat state, welcome message, error handling, language-aware strings</td></tr>
+            <tr><td class="td-accent">hpc/export_chunks.ts</td><td>Step 1 — exports all chunks from Neon to JSON</td></tr>
+            <tr><td class="td-accent">hpc/embed_episodes.py</td><td>Step 3 — embeds chunks using <code>bge-large-en-v1.5</code> on HPC</td></tr>
+            <tr><td class="td-accent">hpc/embed_episodes.slurm</td><td>SLURM job definition for MareNostrum</td></tr>
+            <tr><td class="td-accent">hpc/import_embeddings.ts</td><td>Step 5 — imports embedded chunks back into Neon</td></tr>
+            <tr><td class="td-accent">hpc/requirements.txt</td><td>Python dependencies for HPC venv</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="text-align:center;padding:20px 0 40px">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:0.1em">
+        MAKEIT.TECH · Media Navigator · RAG Chatbot Docs · v1.0.0 · 2026-02-26
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  // Smooth scroll for sidebar links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+        a.classList.add('active');
+      }
+    });
+  });
+
+  // Highlight active section on scroll
+  const sections = document.querySelectorAll('.section, .hero');
+  const sidebarItems = document.querySelectorAll('.sidebar-item');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        sidebarItems.forEach(item => {
+          item.classList.toggle('active', item.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { threshold: 0.3 });
+
+  sections.forEach(s => { if (s.id) observer.observe(s); });
+</script>
+
+</body>
+</html>

@@ -6,14 +6,16 @@ import { AddEpisodeModal } from "@/components/backoffice/AddEpisodeModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBackoffice } from "@/components/backoffice/BackofficeContext";
+import { useLanguage } from "@/hooks/use-language";
 import { motion } from "framer-motion";
-import { Search, Plus, LayoutGrid, List } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 
 const CATEGORIES = ["All", "Technology", "Hardware & PCB", "Design", "Business", "AI & Software", "Innovation", "Other"];
 
 export default function Episodes() {
   const { data: episodes, isLoading } = useEpisodes();
   const { isAdmin } = useBackoffice();
+  const { t } = useLanguage();
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -35,6 +37,13 @@ export default function Episodes() {
     return ["All", ...CATEGORIES.slice(1).filter((c) => cats.has(c))];
   }, [episodes]);
 
+  const count = episodes?.length ?? 0;
+  const countText = isLoading
+    ? t('episodes.loading')
+    : count === 1
+      ? t('episodes.count_one')
+      : t('episodes.count_many').replace('{n}', count);
+
   return (
     <Layout>
       {/* Header */}
@@ -43,16 +52,14 @@ export default function Episodes() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <p className="text-sm font-semibold text-primary uppercase tracking-widest mb-2">Archive</p>
-              <h1 className="font-display font-bold text-4xl md:text-5xl mb-2">All Episodes</h1>
-              <p className="text-muted-foreground">
-                {isLoading ? "Loading…" : `${episodes?.length ?? 0} episode${episodes?.length !== 1 ? "s" : ""} available`}
-              </p>
+              <p className="text-sm font-semibold text-primary uppercase tracking-widest mb-2">{t('episodes.archive')}</p>
+              <h1 className="font-display font-bold text-4xl md:text-5xl mb-2">{t('episodes.title')}</h1>
+              <p className="text-muted-foreground">{countText}</p>
             </motion.div>
 
             {isAdmin && (
               <Button onClick={() => setShowAddModal(true)} className="gap-2 shrink-0">
-                <Plus className="w-4 h-4" /> Add Episode
+                <Plus className="w-4 h-4" /> {t('episodes.add')}
               </Button>
             )}
           </div>
@@ -61,7 +68,7 @@ export default function Episodes() {
           <div className="mt-6 relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search episodes…"
+              placeholder={t('episodes.search_placeholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
@@ -103,13 +110,13 @@ export default function Episodes() {
             </div>
           ) : filtered.length > 0 ? (
             <>
-              {searchQuery || activeCategory !== "All" ? (
+              {(searchQuery || activeCategory !== "All") && (
                 <p className="text-sm text-muted-foreground mb-6">
-                  Showing {filtered.length} result{filtered.length !== 1 ? "s" : ""}
-                  {activeCategory !== "All" ? ` in "${activeCategory}"` : ""}
-                  {searchQuery ? ` for "${searchQuery}"` : ""}
+                  {t('episodes.showing')} {filtered.length} {filtered.length !== 1 ? t('episodes.result_plural') : t('episodes.result_singular')}
+                  {activeCategory !== "All" ? ` ${t('episodes.in_category').replace('{cat}', activeCategory)}` : ""}
+                  {searchQuery ? ` ${t('episodes.for_query').replace('{q}', searchQuery)}` : ""}
                 </p>
-              ) : null}
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {filtered.map((episode, i) => (
                   <EpisodeCard key={episode.id} podcast={episode} index={i} />
@@ -118,13 +125,15 @@ export default function Episodes() {
             </>
           ) : (
             <div className="text-center py-24">
-              <p className="text-lg font-medium text-muted-foreground mb-2">No episodes found</p>
+              <p className="text-lg font-medium text-muted-foreground mb-2">{t('episodes.no_results')}</p>
               <p className="text-sm text-muted-foreground mb-6">
-                {searchQuery ? `No results for "${searchQuery}"` : `No episodes in this category yet.`}
+                {searchQuery
+                  ? t('episodes.no_results_query').replace('{q}', searchQuery)
+                  : t('episodes.no_results_category')}
               </p>
               {isAdmin && (
                 <Button onClick={() => setShowAddModal(true)} className="gap-2">
-                  <Plus className="w-4 h-4" /> Add Episode
+                  <Plus className="w-4 h-4" /> {t('episodes.add')}
                 </Button>
               )}
             </div>

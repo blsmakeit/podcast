@@ -1,532 +1,249 @@
 # 🎙️ MAKEIT.TECH — Media Navigator
 
-> A professional podcast and videocast platform with **PCB (Podcast Content Browser)** — an AI-powered tool built on Anthropic Claude that finds the exact moment you're looking for inside any episode — plus **YouTube Auto-Extraction** that turns any YouTube URL into a fully-structured episode in seconds.
-
 ![Status](https://img.shields.io/badge/Status-Ongoing-green)
+![Version](https://img.shields.io/badge/Version-1.1.0-blue)
 ![Node](https://img.shields.io/badge/Node.js-20+-blue)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
 ![Claude](https://img.shields.io/badge/Claude-Sonnet_4.6-orange)
 ![Express](https://img.shields.io/badge/Express-5-black)
-![GitHub](https://img.shields.io/badge/Source-GitHub-181717)
-![YouTube](https://img.shields.io/badge/Videos-YouTube-FF0000)
+![pgvector](https://img.shields.io/badge/pgvector-1024_dims-6B5B95)
+![VoyageAI](https://img.shields.io/badge/Voyage_AI-voyage--3-5B4A8A)
 ![Netlify](https://img.shields.io/badge/Frontend-Netlify-00C7B7)
 ![Render](https://img.shields.io/badge/Backend-Render-46E3B7)
 ![Neon](https://img.shields.io/badge/Database-Neon-00E5C0)
 ![Supadata](https://img.shields.io/badge/Transcripts-Supadata-6366F1)
 
-## 📖 Overview
+**Media Navigator** is the digital home for MAKEIT OR BREAKIT Podcasts & Videocasts — a platform built for builders, engineers, and founders. It combines **PCB (Podcast Content Browser)**, an AI-powered timestamp search across all episodes, with a full **RAG chatbot** that answers questions about episodes and the show using semantic retrieval. Episodes are enriched automatically via YouTube Auto-Extraction (Supadata + Claude Sonnet 4.6) and a **PT/EN language switch** serves both English and Portuguese audiences from a single Neon translations table.
 
-**Media Navigator** is the digital home for MAKEIT.TECH Podcasts & Videocasts — a platform built for builders, engineers, and founders.
-
-**Test App here**: https://media-navigator.onrender.com/
-
-At its core is **PCB (Podcast Content Browser)** — a dual meaning: *Printed Circuit Board* (the company's hardware roots) and *Podcast Content Browser* (the AI feature). PCB uses **Anthropic Claude Sonnet 4.6** to analyse episode transcripts and jump you directly to the exact timestamp you're looking for.
-
-The platform includes:
-- **PCB AI Search** — natural language search across all episodes with timestamp precision
-- **YouTube Auto-Extraction** — paste a YouTube URL, get description, category, and key moments generated automatically via Supadata + Claude
-- **Episode Grid** with category filters and real-time client-side search
-- **Video Player** with YouTube IFrame support, key moments sidebar, and share functionality
-- **Password-protected Backoffice** — add and delete episodes without touching code
-- **Category System** — 7 predefined categories for episode organisation
-- **Full Deployment Pipeline** — GitHub → Render (backend) + Netlify (frontend) + Neon (DB)
+**Live:** https://media-navigator.onrender.com/
 
 ---
 
-## 🏗️ System Architecture
+## ✨ Features
 
-### Core Components
-
-1. **React Frontend (Netlify)**
-   - JavaScript/JSX — no TypeScript on the client
-   - Wouter for routing, TanStack Query for data fetching
-   - Shadcn/ui + Tailwind CSS + Framer Motion for UI
-   - `VITE_API_URL` env var switches between local proxy and production API
-
-2. **Express Backend (Render)**
-   - TypeScript, Express 5, Drizzle ORM
-   - CORS middleware for cross-origin requests from Netlify
-   - PCB endpoint calls Anthropic Claude with all episode context
-   - Seed data auto-inserted on first boot if DB is empty
-
-3. **PostgreSQL Database (Neon)**
-   - Serverless Postgres — free tier, always-on
-   - Single `podcasts` table with JSONB `transcripts` column
-   - Schema managed with Drizzle Kit (`npm run db:push`)
-
-4. **PCB AI Engine**
-   - `POST /api/ai/search` receives user query
-   - Fetches all episodes + transcripts from DB
-   - Sends context + query to Claude Sonnet 4.6
-   - Returns `{ podcastId, timestamp, explanation }`
-
-5. **YouTube Auto-Extraction Engine**
-   - `POST /api/episodes/extract` receives `{ youtubeUrl, title }`
-   - Extracts video ID → builds embed URL + thumbnail URL
-   - Fetches transcript via **Supadata API** (`api.supadata.ai`) — no scraping, no bot detection
-   - Sends formatted transcript to Claude Sonnet 4.6
-   - Returns `{ videoUrl, thumbnailUrl, description, category, keyMoments }`
-
-### Request Flow
-
-```
-┌─────────────────────────┐
-│   Netlify (Frontend)    │
-│  React 18 + Vite        │
-│  VITE_API_URL → Render  │
-└──────────┬──────────────┘
-           │  HTTPS (CORS-enabled)
-           ▼
-┌─────────────────────────┐
-│   Render (Backend)      │
-│  Express 5 + TypeScript │◄──── env: DATABASE_URL
-│  Port 5000              │◄──── env: ANTHROPIC_API_KEY
-│                         │◄──── env: SUPADATA_API_KEY
-└──────────┬──────────────┘
-           │
-     ┌─────┴──────────────┐
-     │            │       │
-     ▼            ▼       ▼
-┌─────────┐  ┌──────────┐  ┌───────────────┐
-│  Neon   │  │Anthropic │  │  Supadata     │
-│Postgres │  │  Claude  │  │  (transcripts)│
-│  (DB)   │  │ Sonnet   │  │               │
-└─────────┘  └──────────┘  └───────────────┘
-```
-
-### PCB Search Flow
-
-```
-┌──────────────────────────┐
-│  User types query        │
-│  in PCB search bar       │
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  POST /api/ai/search     │
-│  { query: "..." }        │
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  Fetch ALL episodes      │
-│  + transcripts from DB   │
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  Claude Sonnet 4.6       │
-│  analyses context        │
-│  → returns JSON          │
-│  { podcastId,            │
-│    timestamp,            │
-│    explanation }         │
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  Frontend navigates to   │
-│  /podcasts/:id           │
-│  at exact timestamp      │
-└──────────────────────────┘
-```
+- **PCB AI Search** — natural language query → exact timestamp in any episode (20-word limit)
+- **RAG Chatbot** — floating widget, semantic search via pgvector + Voyage AI + Claude Sonnet 4.6 (100-word limit)
+- **YouTube Auto-Extraction** — paste URL → description, category, key moments generated automatically
+- **Gemini 2.0 Flash** as alternative AI provider for extraction
+- **Episode Grid** — category filters, real-time client-side search
+- **Video Player** — YouTube IFrame, key moments sidebar, timestamp deep-links
+- **Backoffice** — password-protected admin mode: add, edit, delete episodes without touching the DB
+- **Questions Carousel** — 8 AI-generated search prompts, 24h cached, rotates every 6s
+- **Featured Q&A Cards** — 3 AI-generated question/answer cards with play buttons
+- **Section Visibility Toggles** — admin can show/hide carousel and featured cards
+- **PT/EN Language Switch** — pill toggle in navbar, DB-backed translations, instant static fallback
+- **Email Subscriptions** — newsletter list stored in Neon, deduplication on insert
+- **Contact Form** — sends email via Resend to `contact@make-it.tech`
+- **HPC Batch Embedding** — MareNostrum5 SLURM pipeline for bulk re-embedding (BAAI/bge-large-en-v1.5)
+- **Draggable chat widget** — position persisted to localStorage
 
 ---
 
-## 📂 Project Structure
+## 🏗️ How It Was Built
 
-```
-Media-Navigator/
-├── client/                      # React frontend (JavaScript/JSX)
-│   ├── index.html
-│   ├── public/
-│   └── src/
-│       ├── components/
-│       │   ├── backoffice/      # Admin-only components
-│       │   │   ├── BackofficeContext.jsx   # Auth context + password modal
-│       │   │   └── AddEpisodeModal.jsx     # Add episode form
-│       │   ├── ui/              # Shadcn/ui primitives (do not edit)
-│       │   ├── EpisodeCard.jsx  # Card with category badge + delete button
-│       │   └── Layout.jsx       # Nav + footer + admin toggle
-│       ├── hooks/
-│       │   ├── use-episodes.js  # All API hooks (episodes + PCB search)
-│       │   ├── use-toast.ts     # Shadcn/ui toast (kept as TS)
-│       │   └── use-mobile.tsx   # Shadcn/ui mobile hook (kept as TS)
-│       ├── lib/
-│       │   ├── queryClient.js   # TanStack Query client
-│       │   └── utils.js         # cn() utility
-│       └── pages/
-│           ├── Home.jsx          # Landing page + PCB search hero
-│           ├── Episodes.jsx      # Full episode grid + category filters
-│           ├── PodcastDetail.jsx # Video player + key moments sidebar
-│           ├── About.jsx
-│           ├── Subscribe.jsx
-│           ├── ComingSoon.jsx    # Placeholder for future pages
-│           └── NotFound.jsx
-├── server/                      # Express backend (TypeScript)
-│   ├── index.ts                 # Entry point + CORS middleware
-│   ├── routes.ts                # All API endpoints + PCB + seed data
-│   ├── storage.ts               # Database access layer (Drizzle)
-│   ├── db.ts                    # Drizzle + pg connection
-│   ├── static.ts                # Serves dist/public in production
-│   └── vite.ts                  # Vite dev middleware (development only)
-├── shared/                      # Shared types — TypeScript
-│   ├── schema.ts                # Drizzle schema + EPISODE_CATEGORIES
-│   └── routes.ts                # Typed API route + Zod schemas
-├── script/
-│   └── build.ts                 # esbuild + vite production build
-├── .env                         # Local secrets (gitignored)
-├── .env.example                 # Environment variable reference
-├── netlify.toml                 # Netlify: build command + SPA redirect
-├── vite.config.ts               # Vite: root, alias, dev proxy → :5000
-├── tailwind.config.ts
-├── drizzle.config.ts
-└── package.json
-```
+React 18 (JSX, no TypeScript) on Netlify talks to an Express 5 + TypeScript API on Render, backed by Neon serverless PostgreSQL with pgvector for semantic search. All AI features — PCB search, RAG chatbot, auto-extraction — run through Anthropic Claude Sonnet 4.6, with Voyage AI `voyage-3` generating 1024-dim embeddings for the vector store and Gemini 2.0 Flash available as an alternative extraction engine.
+
+<details><summary>Frontend</summary>
+
+React 18 + Vite (JSX only — no TypeScript on the client). Wouter for routing, TanStack Query for server state and caching (staleTime 1h for translations). Shadcn/ui component library, Tailwind CSS, Framer Motion for animations. `LanguageProvider` (via `useLanguage`) wraps the entire app for PT/EN i18n — DB values from `/api/translations/:lang` take precedence, with a static JS file as an instant zero-latency fallback. `ChatWidget` is rendered outside `<Router>` so it persists across all pages.
+
+</details>
+
+<details><summary>Backend</summary>
+
+Express 5 + TypeScript. Drizzle ORM with `drizzle-kit` for schema management. 17 API endpoints across episodes, AI search, chatbot, questions, settings, subscribers, contact, and translations. Claude Sonnet 4.6 handles PCB search (`max_tokens: 1024`), RAG chat responses (`max_tokens: 1024`), and episode extraction (`max_tokens: 4096`). Voyage AI `voyage-3` generates 1024-dim embeddings for both new episode chunks (fire-and-forget on create/update) and real-time query embedding in the chat endpoint. Gemini 2.0 Flash is available as an optional extraction AI provider. Resend sends contact form emails.
+
+</details>
+
+<details><summary>Database — Neon + pgvector</summary>
+
+Six tables in Neon serverless PostgreSQL:
+
+| Table | Purpose |
+|-------|---------|
+| `podcasts` | Episodes — title, description, video_url, thumbnail_url, category, transcripts (JSONB) |
+| `episode_chunks` | RAG vector store — `vector(1024)`, chunk_type, content, time_ref, topic |
+| `translations` | PT/EN i18n — key, en, pt (80 keys) |
+| `generated_content` | AI-generated questions carousel + featured Q&A cards (24h DB cache) |
+| `site_settings` | Section visibility toggles (show_carousel, show_featured_questions) |
+| `subscribers` | Newsletter email list |
+
+`episode_chunks` uses a custom Drizzle `customType` for the `vector(1024)` column (pgvector). An IVFFlat index is created manually in the Neon SQL editor.
+
+</details>
+
+<details><summary>RAG Chatbot</summary>
+
+The floating `ChatWidget` sends conversation history (last 10 messages) to `POST /api/chat`. The server embeds the latest user message with Voyage AI `voyage-3`, runs a cosine similarity search against `episode_chunks` (threshold 0.35, top 12), injects the retrieved chunks plus `companyKnowledge` into a Claude Sonnet 4.6 system prompt, and returns JSON `{ message, actions?, sources? }`. The widget renders action pill buttons and source citations below each assistant message. See [RAG_CHATBOT.md](./RAG_CHATBOT.md) for the full technical guide.
+
+</details>
+
+<details><summary>PT/EN Language Switch</summary>
+
+Language state lives in `localStorage` (default: `en`). `LanguageProvider` (`client/src/hooks/use-language.jsx`) fetches `/api/translations/:lang` via TanStack Query (staleTime 1h) and merges DB values over the static fallback in `client/src/lib/translations.js`. The `t(key)` function resolves: DB value → static[lang][key] → static.en[key] → fallback → key. The `LangToggle` pill (EN / PT) appears in the desktop nav (after Subscribe) and in the mobile header (left of hamburger). Translations are seeded to Neon via `POST /api/translations/seed` and updated by re-running the seed (idempotent upsert).
+
+</details>
+
+<details><summary>HPC Batch Embedding (MareNostrum5)</summary>
+
+For bulk re-embedding of all episodes using `BAAI/bge-large-en-v1.5` (1024 dims) on MareNostrum5 (BSC). The pipeline: `hpc/export_chunks.ts` (local) → exports JSON → `scp` to MareNostrum → `hpc/embed_episodes.slurm` runs `hpc/embed_episodes.py` → `scp` output back → `hpc/import_embeddings.ts` (local) upserts into Neon. Used for initial bulk embedding and after major changes to `companyKnowledge`. New episodes are handled automatically by the Voyage AI pipeline. See [RAG_CHATBOT.md](./RAG_CHATBOT.md) for the full step-by-step guide.
+
+</details>
 
 ---
 
-## 🚀 Local Development
+## 🚀 Quick Start
+
+```bash
+git clone https://github.com/your-username/media-navigator.git && cd media-navigator
+npm install
+cp .env.example .env          # fill in DATABASE_URL, ANTHROPIC_API_KEY, VOYAGE_API_KEY
+npm run db:push               # create tables in Neon
+npm run dev                   # http://localhost:5000
+```
+
+Seed translations (one-time, idempotent):
+```bash
+curl -X POST http://localhost:5000/api/translations/seed
+```
+
+<details><summary>Full local setup</summary>
 
 ### Prerequisites
 
 - Node.js 20+
-- A PostgreSQL database — [Neon](https://neon.tech) is recommended (free, no local install)
-- An Anthropic API key — get one at [console.anthropic.com](https://console.anthropic.com)
-- A Supadata API key — get one at [supadata.ai](https://supadata.ai) (required for YouTube transcript extraction)
+- [Neon](https://neon.tech) account (free) — or any PostgreSQL instance with the `vector` extension
+- [Anthropic API key](https://console.anthropic.com) — required for PCB search, chatbot, extraction
+- [Voyage AI API key](https://voyageai.com) — required for RAG embeddings
+- [Supadata API key](https://supadata.ai) — required for YouTube transcript extraction
+- [Resend API key](https://resend.com) — required for contact form email
+- Gemini API key — optional, enables Gemini as an alternative extraction AI
 
-### Setup
+### Setup steps
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/media-navigator.git
-cd media-navigator
-
-# 2. Install dependencies
+# 1. Install dependencies
 npm install
 
-# 3. Configure environment
+# 2. Configure environment
 cp .env.example .env
-# Edit .env — fill in DATABASE_URL, ANTHROPIC_API_KEY, and SUPADATA_API_KEY
+# Edit .env — fill in all required keys
 
-# 4. Push database schema (creates the podcasts table)
+# 3. Enable pgvector in Neon (run once in Neon SQL editor)
+# CREATE EXTENSION IF NOT EXISTS vector;
+
+# 4. Push Drizzle schema to create all 6 tables
 npm run db:push
 
-# 5. Start the full dev server (Express + Vite together)
+# 5. Create the IVFFlat index (run once in Neon SQL editor)
+# CREATE INDEX ON episode_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+
+# 6. Seed translation strings (run once, safe to re-run)
+curl -X POST http://localhost:5000/api/translations/seed
+
+# 7. Start development server
 npm run dev
 ```
 
-The app runs at **http://localhost:5000**
+The app runs at **http://localhost:5000**. Vite proxies all `/api/*` requests to Express — no CORS issues in development.
 
-Vite proxies all `/api/*` requests to the Express server automatically — no CORS issues in development.
-
-### Available Scripts
+### Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Express + Vite dev server together (port 5000) |
-| `npm run dev:client` | Start Vite only, pointing at `VITE_API_URL` |
+| `npm run dev` | Express + Vite together (port 5000) |
 | `npm run build` | Production build — Vite (client) + esbuild (server) |
-| `npm run build:client` | Build frontend only (used by Netlify) |
 | `npm run start` | Start production server (`dist/index.cjs`) |
 | `npm run db:push` | Push Drizzle schema to database |
 | `npm run check` | TypeScript type check |
 
----
-
-## 🎛️ Backoffice Admin
-
-The backoffice is a hidden admin mode that lets you manage episodes without touching the database directly.
-
-| Action | Detail |
-|--------|--------|
-| **Open** | Click **🔒 Admin** in the footer (far right) |
-| **Password** | `MIcompany2020` |
-| **Session** | Stored in `sessionStorage` — clears on tab close |
-| **Exit** | Click **🔓 Exit Admin** in the footer |
-
-**In admin mode:**
-- A red banner appears at the top of every page
-- **+ Add Episode** button appears on Home and Episodes pages
-- A **Delete** button appears on each episode card (asks for confirmation)
-
----
-
-## ➕ Adding Episodes
-
-### Option 1 — YouTube Auto-Extract (recommended)
-
-This is the fastest way to add a MAKEIT.TECH videocast episode:
-
-1. Open the app → footer → **🔒 Admin** → enter password
-2. Click **+ Add Episode**
-3. Enter the **Title** and paste the **YouTube URL**
-4. Choose extraction options:
-
-   **Transcript Source**
-   | Option | When to use |
-   |--------|-------------|
-   | **Auto (YouTube)** | Default — fetches transcript automatically from YouTube via Supadata |
-   | **Import file** | Use when YouTube captions are unavailable — paste transcript exported from Adobe Premiere or any tool that generates timestamped text |
-
-   **Analysis Mode**
-   | Option | When to use |
-   |--------|-------------|
-   | **Full analysis** | Default — sends the complete transcript to Claude. Best for videos under 45 min |
-   | **Summarised** | Recommended for videos over 45 min — samples the transcript evenly across the entire video to preserve full coverage (beginning, middle, end) without exceeding Claude's token limit |
-
-5. Click **Extract** — the backend fetches the transcript, sends it to **Claude Sonnet 4.6**, and auto-fills description, category, thumbnail, and key moments
-6. Review the extracted data (all fields remain editable)
-7. Click **Add Episode** — appears immediately
-
-**YouTube video requirements** when using Auto (YouTube) source:
-
-| Requirement | Detail |
-|-------------|--------|
-| **Ownership** | Must be your own channel's video |
-| **Visibility** | Public or Unlisted — Private videos are not supported |
-| **Language** | English or Portuguese |
-| **Chapters** | Add chapters/sections in the video description for best key moments |
-
-> If a video has no YouTube captions, switch to **Import file** and paste the transcript manually (see Option 3 below).
-
-### Option 2 — Manual entry via Backoffice
-
-1. Open the app → footer → **🔒 Admin** → enter password
-2. Click **+ Add Episode**
-3. Fill in all fields manually:
-   - **Title** — episode title
-   - **Description** — short summary (used by PCB as fallback)
-   - **Video URL** — direct `.mp4` link or YouTube embed URL
-   - **Thumbnail URL** — card image (16:9 recommended)
-   - **Category** — see [Categories](#-categories) below
-   - **Key Moments** — rows of `Time / Topic / Text` (critical for PCB accuracy)
-4. Click **Add Episode** — appears immediately
-
-### Option 3 — Import Transcript from Premiere (or any tool)
-
-Use this when the YouTube video has no captions, or when you have a higher-quality transcript from your editing software:
-
-1. In **Adobe Premiere** (or any tool), export the transcript as a text file with timestamps
-2. Open **Add Episode** modal → paste the **YouTube URL** and enter the **Title**
-3. Under **Transcript Source**, select **Import file**
-4. Paste the transcript text into the textarea that appears
-5. Choose **Analysis Mode** (Full or Summarised — see Option 1 for guidance)
-6. Click **Extract** — Claude analyses your pasted transcript instead of fetching from YouTube
-7. Review and publish
-
-**Supported transcript formats:**
-
-| Format | Example |
-|--------|---------|
-| `[MM:SS]` timestamps | `[01:30] We discuss hardware prototyping...` |
-| `[HH:MM:SS]` timestamps | `[00:01:30] We discuss hardware prototyping...` |
-| Plain text (no timestamps) | Lines are assigned 5-second intervals automatically |
-
-### Option 4 — Via Neon SQL Editor
-
-Open the Neon dashboard → SQL Editor and run:
-
-```sql
-INSERT INTO podcasts (title, description, video_url, thumbnail_url, category, transcripts)
-VALUES (
-  'Episode Title',
-  'Short episode description.',
-  'https://your-cdn.com/episode.mp4',
-  'https://your-cdn.com/thumbnail.jpg',
-  'Technology',
-  '[
-    {"time":"00:00","topic":"Introduction","text":"Welcome and overview of the episode."},
-    {"time":"05:30","topic":"Main Topic","text":"We dive into the core subject matter."},
-    {"time":"18:45","topic":"Key Insight","text":"The most important takeaway from this discussion."}
-  ]'
-);
-```
-
-**Transcript format (JSONB):**
-| Field | Format | Description |
-|-------|--------|-------------|
-| `time` | `"MM:SS"` or `"HH:MM:SS"` | Timestamp for this moment |
-| `topic` | Short string | Label shown in the sidebar |
-| `text` | 1–2 sentences | Context shown as preview — used by PCB |
-
----
-
-## 🏷️ Categories
-
-Defined in `shared/schema.ts` as `EPISODE_CATEGORIES`:
-
-| Category | Use for |
-|----------|---------|
-| `Technology` | General tech topics |
-| `Hardware & PCB` | Electronics, circuit boards, embedded systems |
-| `Design` | UX, product design, visual design |
-| `Business` | Entrepreneurship, strategy, growth |
-| `AI & Software` | Machine learning, software engineering |
-| `Innovation` | New ideas, future of tech |
-| `Other` | Anything that doesn't fit |
-
----
-
-## 🤖 PCB — How the AI Works
-
-**PCB** = *Printed Circuit Board* (MAKEIT.TECH's hardware roots) + *Podcast Content Browser*
-
-### Endpoint
-
-```
-POST /api/ai/search
-Body: { "query": "how to build an MVP fast" }
-Response: { "podcastId": 1, "timestamp": "05:30", "explanation": "..." }
-```
-
-### How to maximise accuracy
-
-The quality of PCB results depends entirely on the **Key Moments** (transcripts) you add to each episode:
-
-- Add **at least 5–10 key moments** per episode
-- Write `text` in plain, searchable language — describe what is *discussed*, not just the topic name
-- Cover the full timeline of the episode (beginning, middle, end)
-- Be specific: `"We discuss the exact tools and frameworks used to build the MVP in 2024"` beats `"Tools"`
-
-### Token management during extraction
-
-When extracting with Claude, the transcript is sent as context. Long videos produce large transcripts that can exceed Claude's token limit:
-
-| Mode | How it works | Best for |
-|------|-------------|----------|
-| **Full analysis** | Sends the complete transcript to Claude | Videos under ~45 min |
-| **Summarised** | Samples 1 line every N lines, evenly across the entire video — preserves coverage of beginning, middle, and end without exceeding the token limit | Videos over 45 min |
-
-If extraction fails with a token/context error, switch to **Summarised** mode.
-
-**Environment variable required:**
-- Local: `ANTHROPIC_API_KEY` in `.env`
-- Production: `ANTHROPIC_API_KEY` in Render environment variables
-
----
-
-## ☁️ Deployment: GitHub + Netlify + Render + Neon
-
-All four services have **free tiers** — no credit card required for basic use.
-
-| Service | Role | Free? |
-|---------|------|-------|
-| **GitHub** | Source code + auto-deploys trigger | Yes |
-| **Neon** | Serverless PostgreSQL database | Yes — permanent free tier |
-| **Render** | Express API server | Yes — sleeps after 15 min inactivity |
-| **Netlify** | React frontend (static hosting) | Yes — unlimited deploys |
-
----
-
-### Step 1 — Neon (database)
-
-1. Go to [neon.tech](https://neon.tech) → Create account → **New Project**
-2. Choose a region close to your audience
-3. Copy the **Connection string** (format: `postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require`)
-4. Add it to your local `.env` as `DATABASE_URL`
-5. Run schema migration once from your local terminal:
-   ```bash
-   npm run db:push
-   ```
-
----
-
-### Step 2 — Render (backend)
-
-1. Go to [render.com](https://render.com) → **New** → **Web Service** → connect GitHub → select repo
-2. Configure:
-
-   | Setting | Value |
-   |---------|-------|
-   | **Build command** | `npm install --include=dev && npm run build` |
-   | **Start command** | `npm run start` |
-   | **Node version** | `20` |
-
-3. Add **Environment Variables**:
-
-   | Key | Value |
-   |-----|-------|
-   | `DATABASE_URL` | Your Neon connection string |
-   | `ANTHROPIC_API_KEY` | Your Anthropic API key |
-   | `SUPADATA_API_KEY` | Your Supadata API key |
-   | `NODE_ENV` | `production` |
-
-4. Deploy — note your Render URL (e.g. `https://media-navigator.onrender.com`)
-
-> ⚠️ **Important:** The build command must use `--include=dev` because `tsx`, `vite`, and `esbuild` are devDependencies needed during the build phase.
-
-> 💤 **Free tier note:** The server sleeps after 15 minutes of inactivity. The first request after sleeping takes ~30 seconds.
-
----
-
-### Step 3 — Netlify (frontend)
-
-1. Go to [netlify.com](https://netlify.com) → **Add new site** → **Import from GitHub** → select repo
-2. Netlify reads `netlify.toml` automatically — no build settings needed
-3. Add **Environment Variable**:
-
-   | Key | Value |
-   |-----|-------|
-   | `VITE_API_URL` | Your Render URL (e.g. `https://media-navigator.onrender.com`) |
-
-4. Click **Deploy site**
-
----
-
-### Updating the app
-
-Every `git push` to `main` triggers automatic redeployment on both Render and Netlify:
-
-```bash
-git add .
-git commit -m "Your change description"
-git push
-```
+</details>
 
 ---
 
 ## 🔑 Environment Variables
 
-| Variable | Where | Required | Description |
-|----------|-------|----------|-------------|
-| `DATABASE_URL` | `.env` + Render | Yes | Neon PostgreSQL connection string |
-| `ANTHROPIC_API_KEY` | `.env` + Render | Yes | Anthropic API key for PCB + auto-extraction |
-| `SUPADATA_API_KEY` | `.env` + Render | Yes | Supadata API key for YouTube transcript extraction |
-| `PORT` | `.env` only | No | Server port (default: `5000`) |
-| `VITE_API_URL` | Netlify dashboard | Production only | Full Render backend URL |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Neon PostgreSQL connection string |
+| `ANTHROPIC_API_KEY` | Yes | Claude Sonnet 4.6 — PCB search, chatbot, extraction |
+| `VOYAGE_API_KEY` | Yes | Voyage AI `voyage-3` — RAG embeddings |
+| `SUPADATA_API_KEY` | Yes | YouTube transcript extraction |
+| `RESEND_API_KEY` | Yes | Contact form email delivery |
+| `GEMINI_API_KEY` | Optional | Gemini 2.0 Flash — alternative extraction AI |
+| `PORT` | No | Server port (default: `5000`) |
+| `VITE_API_URL` | Production | Full Render backend URL (set in Netlify dashboard) |
 
-> `.env` is gitignored and never committed. Use `.env.example` as reference.
+> Copy `.env.example` to `.env` for local development. Never commit `.env`.
 
 ---
 
-## 🛠️ Technical Stack
+## ☁️ Deployment
 
-| Layer | Technology | Version | Purpose |
-|-------|-----------|---------|---------|
-| **Frontend** | React | 18 | UI framework |
-| **Language** | JavaScript/JSX | ES2022 | Client-side (no TypeScript) |
-| **Routing** | Wouter | ^3.3 | Lightweight SPA router |
-| **Data Fetching** | TanStack Query | ^5.60 | Server state + caching |
-| **UI Components** | Shadcn/ui | Latest | Accessible component library |
-| **Styling** | Tailwind CSS | ^3.4 | Utility-first CSS |
-| **Animation** | Framer Motion | ^11 | Page and component animations |
-| **Backend** | Express | 5 | API server |
-| **Backend Language** | TypeScript | 5.6 | Server-side type safety |
-| **ORM** | Drizzle ORM | ^0.39 | Type-safe database queries |
-| **Database** | PostgreSQL | via Neon | Relational data storage |
-| **AI** | Anthropic Claude | Sonnet 4.6 | PCB podcast search + episode analysis |
-| **Transcript API** | Supadata | REST v1 | YouTube transcript extraction |
-| **Build — Client** | Vite | ^7.3 | Frontend bundler |
-| **Build — Server** | esbuild | ^0.25 | Server bundler (CJS output) |
-| **Hosting — Frontend** | Netlify | — | Static site hosting |
-| **Hosting — Backend** | Render | — | Node.js web service |
-| **Database Host** | Neon | — | Serverless PostgreSQL |
+**Neon** hosts the PostgreSQL database (serverless, free tier, pgvector enabled). **Render** runs the Express API (free tier — sleeps after 15 min inactivity, ~30s cold start). **Netlify** serves the React frontend as a static site.
+
+Every `git push` to `main` triggers automatic redeployment on both Render and Netlify.
+
+<details><summary>Render configuration</summary>
+
+1. New Web Service → connect GitHub repo
+2. Configure:
+
+   | Setting | Value |
+   |---------|-------|
+   | Build command | `npm install --include=dev && npm run build` |
+   | Start command | `npm run start` |
+   | Node version | `20` |
+
+3. Environment variables to add:
+
+   | Key | Value |
+   |-----|-------|
+   | `DATABASE_URL` | Neon connection string |
+   | `ANTHROPIC_API_KEY` | Anthropic key |
+   | `VOYAGE_API_KEY` | Voyage AI key |
+   | `SUPADATA_API_KEY` | Supadata key |
+   | `RESEND_API_KEY` | Resend key |
+   | `GEMINI_API_KEY` | Optional — Gemini key |
+   | `NODE_ENV` | `production` |
+
+> `--include=dev` is required in the build command because `tsx`, `vite`, and `esbuild` are devDependencies used at build time.
+
+**Netlify:** add a single env var — `VITE_API_URL` → your Render URL (e.g. `https://media-navigator.onrender.com`).
+
+</details>
+
+<details><summary>Post-deploy checklist</summary>
+
+Run these once after first deploy (or after a major schema change):
+
+1. **Enable pgvector** — Neon SQL editor:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+
+2. **Create tables** — from local terminal (pointing at production `DATABASE_URL`):
+   ```bash
+   npm run db:push
+   ```
+
+3. **Create IVFFlat index** — Neon SQL editor:
+   ```sql
+   CREATE INDEX ON episode_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+   ```
+
+4. **Seed translations** — after deploy:
+   ```bash
+   curl -X POST https://your-render-url.onrender.com/api/translations/seed
+   ```
+
+</details>
 
 ---
 
 ## 📡 API Reference
+
+<details><summary>All 17 endpoints</summary>
 
 ### Episodes
 
@@ -534,87 +251,175 @@ git push
 |--------|----------|-------------|
 | `GET` | `/api/podcasts` | List all episodes |
 | `GET` | `/api/podcasts/:id` | Get single episode |
-| `POST` | `/api/podcasts` | Create episode (backoffice) |
-| `DELETE` | `/api/podcasts/:id` | Delete episode (backoffice) |
+| `POST` | `/api/podcasts` | Create episode — triggers embeddings + question regeneration |
+| `PUT` | `/api/podcasts/:id` | Update episode — triggers embeddings + question regeneration |
+| `DELETE` | `/api/podcasts/:id` | Delete episode — triggers question regeneration |
+| `POST` | `/api/episodes/extract` | YouTube auto-extraction (Supadata + Claude or Gemini) |
 
-### YouTube Auto-Extraction
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/episodes/extract` | Extract episode data from YouTube URL |
-
-**Request:**
-```json
-{
-  "youtubeUrl": "https://www.youtube.com/watch?v=VIDEO_ID",
-  "title": "Episode Title",
-  "transcriptSource": "supadata | file",
-  "transcriptText": "optional — paste transcript from Premiere or any tool (required when transcriptSource is file)",
-  "analysisMode": "full | summary"
-}
-```
-
-| Field | Values | Default | Description |
-|-------|--------|---------|-------------|
-| `youtubeUrl` | URL string | — | Required. YouTube watch, short, or embed URL |
-| `title` | string | — | Required. Episode title |
-| `transcriptSource` | `"supadata"` \| `"file"` | `"supadata"` | Where to fetch the transcript from |
-| `transcriptText` | string | — | Required when `transcriptSource` is `"file"` — raw transcript text, supports `[MM:SS]` timestamps or plain text |
-| `analysisMode` | `"full"` \| `"summary"` | `"full"` | `"full"` sends the complete transcript; `"summary"` samples evenly up to 200 lines to prevent token overload on long videos |
-
-**Response:**
-```json
-{
-  "videoUrl": "https://www.youtube.com/embed/VIDEO_ID",
-  "thumbnailUrl": "https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg",
-  "description": "AI-generated 2–3 sentence summary.",
-  "category": "Technology",
-  "keyMoments": [
-    { "time": "00:00", "topic": "Introduction", "text": "Opening discussion..." },
-    { "time": "05:30", "topic": "Main Topic", "text": "Deep dive into..." }
-  ]
-}
-```
-
-### PCB AI Search
+### AI
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/ai/search` | Search episodes with Claude |
+| `POST` | `/api/ai/search` | PCB search — all episodes → Claude → `{ podcastId, timestamp, explanation }` |
+| `POST` | `/api/chat` | RAG chatbot — pgvector search → Claude → `{ message, actions?, sources? }` |
 
-**PCB Request:**
-```json
-{ "query": "how to build an MVP fast" }
-```
+### Content
 
-**PCB Response:**
-```json
-{
-  "podcastId": 1,
-  "timestamp": "05:30",
-  "explanation": "At 5:30, the hosts discuss rapid MVP building techniques using lean startup principles."
-}
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/questions` | 8 AI-generated search suggestions (24h DB cache) |
+| `GET` | `/api/featured-questions` | 3 AI-generated Q&A cards (24h DB cache) |
+
+### Settings
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/settings` | Section visibility flags |
+| `PUT` | `/api/settings` | Update a single setting key |
+
+### Subscribers
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/subscribe` | Add email to subscriber list |
+| `GET` | `/api/subscribers` | List all subscribers (admin) |
+
+### Contact
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/contact` | Send contact form email via Resend |
+
+### Translations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/translations/:lang` | Get all strings for `en` or `pt` |
+| `POST` | `/api/translations/seed` | Upsert all 80 translation strings (idempotent) |
+
+</details>
 
 ---
 
-## 👨‍💻 Author
+## 📂 Project Structure
+
+<details><summary>Directory tree with descriptions</summary>
+
+```
+Media-Navigator/
+├── client/                          # React frontend (JavaScript/JSX)
+│   ├── index.html
+│   ├── public/
+│   └── src/
+│       ├── components/
+│       │   ├── backoffice/
+│       │   │   ├── BackofficeContext.jsx   # Auth context + password modal
+│       │   │   └── AddEpisodeModal.jsx     # Add/edit episode form
+│       │   ├── chat/
+│       │   │   └── ChatWidget.jsx          # Draggable RAG chatbot widget
+│       │   ├── ui/                         # Shadcn/ui primitives (do not edit)
+│       │   ├── EpisodeCard.jsx             # Card with category badge + delete button
+│       │   └── Layout.jsx                  # Nav + footer + LangToggle + admin toggle
+│       ├── hooks/
+│       │   ├── use-episodes.js             # Episode + PCB + questions + settings hooks
+│       │   ├── use-chat.js                 # Chat state + POST /api/chat mutation
+│       │   ├── use-language.jsx            # LanguageProvider + useLanguage()
+│       │   ├── use-toast.ts                # Shadcn/ui toast (kept as TS)
+│       │   └── use-mobile.tsx              # Shadcn/ui mobile hook (kept as TS)
+│       ├── lib/
+│       │   ├── translations.js             # Static PT/EN fallback (80 keys)
+│       │   ├── queryClient.js              # TanStack Query client
+│       │   └── utils.js                    # cn() utility
+│       └── pages/
+│           ├── Home.jsx                    # Hero + PCB search + carousel + featured Q&A
+│           ├── Episodes.jsx                # Full episode grid + category filters
+│           ├── PodcastDetail.jsx           # Video player + key moments sidebar
+│           ├── About.jsx                   # About page
+│           ├── Subscribe.jsx               # Email subscription form
+│           ├── Contact.jsx                 # Contact form
+│           ├── ComingSoon.jsx              # Placeholder for future pages
+│           └── NotFound.jsx
+├── server/                          # Express backend (TypeScript)
+│   ├── index.ts                     # Entry point + CORS middleware
+│   ├── routes.ts                    # All 17 endpoints + AI helpers + seed
+│   ├── storage.ts                   # Database access layer (Drizzle)
+│   ├── db.ts                        # Drizzle + pg connection
+│   ├── knowledge/
+│   │   └── company.ts               # Company knowledge base (injected in chat prompt)
+│   ├── static.ts                    # Serves dist/public in production
+│   └── vite.ts                      # Vite dev middleware
+├── shared/                          # Shared types — TypeScript
+│   ├── schema.ts                    # Drizzle schema — 6 tables + EPISODE_CATEGORIES
+│   └── routes.ts                    # Typed API routes + Zod schemas
+├── hpc/                             # MareNostrum5 batch embedding pipeline
+│   ├── export_chunks.ts             # Local: export all chunks to JSON
+│   ├── embed_episodes.py            # HPC: generate embeddings with BAAI/bge-large-en-v1.5
+│   ├── embed_episodes.slurm         # SLURM job script
+│   ├── import_embeddings.ts         # Local: import embeddings back to Neon
+│   ├── requirements.txt             # Python deps for HPC
+│   └── README.md                    # HPC pipeline quick reference
+├── script/
+│   └── build.ts                     # esbuild + Vite production build
+├── .env.example                     # Environment variable reference
+├── netlify.toml                     # Netlify build config + SPA redirect
+├── vite.config.ts                   # Vite: root, alias, dev proxy → :5000
+├── drizzle.config.ts                # Drizzle Kit config
+├── tailwind.config.ts
+├── RAG_CHATBOT.md                   # Deep technical guide for the RAG chatbot
+└── USAGE.md                         # Admin usage guide
+```
+
+</details>
+
+---
+
+## 🛠️ Tech Stack
+
+<details><summary>Full stack table</summary>
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| Frontend | React | 18 | UI framework |
+| Language | JavaScript/JSX | ES2022 | Client-side (no TypeScript) |
+| Routing | Wouter | ^3.3 | Lightweight SPA router |
+| Data Fetching | TanStack Query | ^5.60 | Server state + caching |
+| UI Components | Shadcn/ui | Latest | Accessible component library |
+| Styling | Tailwind CSS | ^3.4 | Utility-first CSS |
+| Animation | Framer Motion | ^11 | Page and component animations |
+| Backend | Express | 5 | API server |
+| Backend Language | TypeScript | 5.6 | Server-side type safety |
+| ORM | Drizzle ORM | ^0.39 | Type-safe database queries |
+| Database | PostgreSQL (Neon) | — | Relational data + vector store |
+| Vector Extension | pgvector | — | Cosine similarity search |
+| AI — Chat/PCB | Anthropic Claude | Sonnet 4.6 | PCB search, RAG chat, extraction |
+| AI — Extraction | Google Gemini | 2.0 Flash | Alternative extraction provider |
+| Embeddings | Voyage AI | voyage-3 (1024 dims) | RAG query + episode embeddings |
+| Embeddings (HPC) | BAAI/bge-large-en-v1.5 | — | Bulk embedding on MareNostrum5 |
+| Transcript API | Supadata | REST v1 | YouTube transcript extraction |
+| Email | Resend | — | Contact form delivery |
+| Build — Client | Vite | ^7.3 | Frontend bundler |
+| Build — Server | esbuild | ^0.25 | Server bundler (CJS output) |
+| Hosting — Frontend | Netlify | — | Static site hosting |
+| Hosting — Backend | Render | — | Node.js web service |
+| Database Host | Neon | — | Serverless PostgreSQL |
+
+</details>
+
+---
+
+## 📚 Documentation
+
+- [USAGE.md](./USAGE.md) — Admin usage guide: adding episodes, managing content, chatbot, language switch
+- [RAG_CHATBOT.md](./RAG_CHATBOT.md) — RAG chatbot deep technical guide: architecture, embedding pipelines, HPC, troubleshooting
+
+---
+
+## 👨‍💻 Author + Acknowledgments
 
 **Bruno Sousa** — MAKEIT.TECH
 
----
-
-## 🙏 Acknowledgments
-
-- **Anthropic** for Claude Sonnet 4.6
-- **Supadata** for YouTube transcript extraction API
-- **Neon** for serverless PostgreSQL
-- **Shadcn/ui** for the component library
-- **Drizzle ORM** for type-safe database access
-- **Render & Netlify** for free-tier hosting
+Thanks to: **Anthropic** (Claude Sonnet 4.6), **Voyage AI** (voyage-3 embeddings), **Supadata** (YouTube transcripts), **Neon** (serverless PostgreSQL + pgvector), **Shadcn/ui**, **Drizzle ORM**, **Render**, **Netlify**, **BSC MareNostrum5** (HPC batch embeddings).
 
 ---
 
-**Version**: 1.0.0
-**Status**: Ongoing
-**Last Updated**: 2026-02-23
+**Version**: 1.1.0 | **Status**: Ongoing | **Last Updated**: 2026-02-26

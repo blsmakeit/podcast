@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
+import { useLanguage } from '@/hooks/use-language';
 
-const BUTTON_SIZE = 56; // w-14 = 56px
-const PANEL_GAP = 12;   // gap between top of button and bottom of panel
-const EDGE_MARGIN = 8;  // min distance from viewport edge
+const BUTTON_SIZE = 56;
+const PANEL_GAP = 12;
+const EDGE_MARGIN = 8;
+const CHAT_WORD_LIMIT = 100;
+
+function wordCount(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
 
 function loadPos() {
   try {
@@ -34,7 +40,6 @@ function ChatMessages({ messages, isPending }) {
             {msg.content}
           </div>
 
-          {/* Action buttons */}
           {msg.actions?.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2 max-w-[85%]">
               {msg.actions.map((action, j) => (
@@ -49,7 +54,6 @@ function ChatMessages({ messages, isPending }) {
             </div>
           )}
 
-          {/* Sources */}
           {msg.sources?.length > 0 && (
             <div className="mt-1 max-w-[85%] space-y-0.5">
               {msg.sources.map((s, j) => (
@@ -78,33 +82,44 @@ function ChatMessages({ messages, isPending }) {
   );
 }
 
-function ChatInput({ onSend, isPending }) {
+function ChatInput({ onSend, isPending, t }) {
   const [input, setInput] = useState('');
+  const count = input.trim() ? wordCount(input) : 0;
+  const isOverLimit = count > CHAT_WORD_LIMIT;
 
   const handleSend = () => {
-    if (!input.trim() || isPending) return;
+    if (!input.trim() || isPending || isOverLimit) return;
     onSend(input.trim());
     setInput('');
   };
 
   return (
-    <div className="p-3 border-t border-gray-100 flex gap-2">
-      <input
-        type="text"
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && handleSend()}
-        placeholder="Ask me anything..."
-        disabled={isPending}
-        className="flex-1 text-sm border border-gray-200 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
-      />
-      <button
-        onClick={handleSend}
-        disabled={!input.trim() || isPending}
-        className="w-9 h-9 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 transition disabled:opacity-40 flex-shrink-0 text-sm"
-      >
-        ➤
-      </button>
+    <div className="border-t border-gray-100">
+      <div className="p-3 flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSend()}
+          placeholder={t('chat.placeholder')}
+          disabled={isPending}
+          className={`flex-1 text-sm border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors ${
+            isOverLimit ? 'border-red-400' : 'border-gray-200'
+          }`}
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim() || isPending || isOverLimit}
+          className="w-9 h-9 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 transition disabled:opacity-40 flex-shrink-0 text-sm"
+        >
+          ➤
+        </button>
+      </div>
+      {count > 0 && (
+        <p className={`text-right text-xs px-4 pb-2 transition-colors ${isOverLimit ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+          {count}/{CHAT_WORD_LIMIT}{isOverLimit ? ` — ${t('chat.word_limit')}` : ''}
+        </p>
+      )}
     </div>
   );
 }
@@ -112,9 +127,8 @@ function ChatInput({ onSend, isPending }) {
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const { messages, sendMessage, isPending, clearChat } = useChat();
+  const { t } = useLanguage();
 
-  // Position stored as { x: rightOffset, y: bottomOffset } in pixels
-  // Default: 24px from bottom-right (equivalent to Tailwind's bottom-6 right-6)
   const [pos, setPos] = useState(loadPos);
   const isDragging = useRef(false);
   const hasDragged = useRef(false);
@@ -139,13 +153,10 @@ export default function ChatWidget() {
       const dx = e.clientX - dragOrigin.current.mouseX;
       const dy = e.clientY - dragOrigin.current.mouseY;
 
-      // Consider it a drag after 4px movement
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
         hasDragged.current = true;
       }
 
-      // Moving right → right offset decreases (button moves right)
-      // Moving down  → bottom offset decreases (button moves down)
       const newX = Math.max(
         EDGE_MARGIN,
         Math.min(window.innerWidth - BUTTON_SIZE - EDGE_MARGIN, dragOrigin.current.posX - dx)
@@ -161,7 +172,6 @@ export default function ChatWidget() {
     const onMouseUp = () => {
       if (!isDragging.current) return;
       isDragging.current = false;
-      // Persist final position after drag ends
       setPos(current => {
         localStorage.setItem('chatWidgetPos', JSON.stringify(current));
         return current;
@@ -177,19 +187,16 @@ export default function ChatWidget() {
   }, []);
 
   const handleClick = () => {
-    // Only toggle open/close if the user didn't drag
     if (!hasDragged.current) {
       setIsOpen(prev => !prev);
     }
   };
 
-  // Panel sits above the button, aligned to the same right edge
   const panelBottom = pos.y + BUTTON_SIZE + PANEL_GAP;
   const panelRight = pos.x;
 
   return (
     <>
-      {/* Floating button + thought bubble */}
       <div
         style={{ position: 'fixed', bottom: pos.y, right: pos.x, zIndex: 50 }}
         className="flex flex-col items-end select-none"
@@ -202,13 +209,12 @@ export default function ChatWidget() {
               exit={{ opacity: 0, y: 5 }}
               className="mb-2 bg-white border border-gray-200 shadow-md rounded-2xl px-3 py-1.5 text-xs font-medium text-gray-700 whitespace-nowrap pointer-events-none"
             >
-              Ask me anything ✨
+              {t('chat.bubble')}
             </motion.div>
           )}
         </AnimatePresence>
 
         <div className="relative">
-          {/* Pulse ring — only when closed */}
           {!isOpen && (
             <span className="absolute inset-0 rounded-full bg-red-500 opacity-30 animate-ping pointer-events-none" />
           )}
@@ -234,7 +240,6 @@ export default function ChatWidget() {
         </div>
       </div>
 
-      {/* Chat panel — follows the button position */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -256,14 +261,14 @@ export default function ChatWidget() {
             <div className="bg-red-600 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
               <div>
                 <p className="font-semibold text-sm">MAKEIT OR BREAKIT</p>
-                <p className="text-xs text-red-200">Ask me about episodes or the show</p>
+                <p className="text-xs text-red-200">{t('chat.header.subtitle')}</p>
               </div>
               <div className="flex gap-3 items-center">
                 <button
                   onClick={clearChat}
                   className="text-red-200 hover:text-white text-xs transition"
                 >
-                  Clear
+                  {t('chat.clear')}
                 </button>
                 <button
                   onClick={() => setIsOpen(false)}
@@ -275,7 +280,7 @@ export default function ChatWidget() {
             </div>
 
             <ChatMessages messages={messages} isPending={isPending} />
-            <ChatInput onSend={sendMessage} isPending={isPending} />
+            <ChatInput onSend={sendMessage} isPending={isPending} t={t} />
           </motion.div>
         )}
       </AnimatePresence>

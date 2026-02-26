@@ -8,8 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useBackoffice } from "@/components/backoffice/BackofficeContext";
+import { useLanguage } from "@/hooks/use-language";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight, Loader2, Play, Plus, X } from "lucide-react";
+
+const PCB_WORD_LIMIT = 20;
+
+function wordCount(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
 
 function timeToSeconds(ts) {
   if (!ts) return 0;
@@ -28,7 +35,6 @@ function ClockIcon({ className }) {
   );
 }
 
-// PCB circuit icon (simple SVG)
 function PCBIcon({ className }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -42,10 +48,14 @@ function PCBIcon({ className }) {
 export default function Home() {
   const { data: podcasts, isLoading } = useEpisodes();
   const { isAdmin } = useBackoffice();
+  const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const { mutate: searchPCB, isPending: isSearching, data: pcbResult, reset } = usePCBSearch();
   const [, setLocation] = useLocation();
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const queryWordCount = query.trim() ? wordCount(query) : 0;
+  const isOverPCBLimit = queryWordCount > PCB_WORD_LIMIT;
 
   // Questions carousel
   const { data: questionsData, isLoading: questionsLoading } = useQuestions();
@@ -80,7 +90,7 @@ export default function Home() {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || isOverPCBLimit) return;
     searchPCB(query);
   };
 
@@ -95,7 +105,6 @@ export default function Home() {
     <Layout>
       {/* Hero Section */}
       <section className="relative pt-20 pb-32 overflow-hidden">
-        {/* Background */}
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-background to-background" />
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl opacity-50" />
         <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl opacity-50" />
@@ -106,22 +115,21 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            {/* Show name */}
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">MAKEIT.TECH presents</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">{t('home.presents')}</p>
             <h1 className="font-display font-black text-6xl md:text-8xl mb-4 tracking-tight leading-[1]">
               MAKEIT<br /><span className="text-gradient">OR BREAKIT</span>
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              The show where founders, engineers and builders share what it really takes — or what breaks you.
+              {t('home.subtitle')}
             </p>
 
             {/* PCB badge + label */}
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-3">
               <PCBIcon className="w-4 h-4" />
-              PCB — Podcast Content Browser
+              {t('home.pcb.label')}
             </span>
             <p className="text-sm text-muted-foreground mb-4">
-              Search inside <strong className="text-foreground">MAKEIT OR BREAKIT</strong> episodes
+              {t('home.pcb.description')}
             </p>
 
             {/* PCB Search Bar */}
@@ -131,7 +139,7 @@ export default function Home() {
                 <Search className="w-5 h-5 text-muted-foreground ml-3 shrink-0" />
                 <Input
                   className="flex-1 border-0 shadow-none focus-visible:ring-0 bg-transparent text-lg placeholder:text-muted-foreground/50 h-12"
-                  placeholder="Ask PCB anything — topic, keyword, question…"
+                  placeholder={t('home.pcb.placeholder')}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   disabled={isSearching}
@@ -139,12 +147,18 @@ export default function Home() {
                 <Button
                   size="lg"
                   type="submit"
-                  disabled={isSearching || !query.trim()}
+                  disabled={isSearching || !query.trim() || isOverPCBLimit}
                   className="rounded-lg px-8 font-semibold shadow-lg shadow-primary/20 shrink-0"
                 >
-                  {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Ask PCB"}
+                  {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : t('home.pcb.button')}
                 </Button>
               </form>
+              {/* Word count indicator */}
+              <div className="flex justify-end mt-1 pr-1">
+                <span className={`text-xs transition-colors ${isOverPCBLimit ? 'text-destructive font-medium' : 'text-muted-foreground/50'}`}>
+                  {queryWordCount > 0 && `${queryWordCount}/${PCB_WORD_LIMIT} ${t('home.pcb.word_limit')}`}
+                </span>
+              </div>
             </div>
 
             {/* PCB Result Card */}
@@ -168,20 +182,20 @@ export default function Home() {
                       <div className="flex-1">
                         <h3 className="font-display font-bold text-lg mb-2 flex items-center gap-2">
                           <PCBIcon className="w-4 h-4 text-primary" />
-                          PCB Found a Match
+                          {t('home.pcb.found')}
                         </h3>
                         <p className="text-muted-foreground mb-4">"{pcbResult.explanation}"</p>
                         {pcbResult.timestamp && (
                           <div className="inline-flex items-center gap-2 text-sm font-medium bg-background/50 px-3 py-1 rounded-md border border-border/50">
                             <ClockIcon className="w-4 h-4 text-primary" />
-                            Timestamp: <span className="font-mono text-primary">{pcbResult.timestamp}</span>
+                            {t('home.pcb.timestamp')} <span className="font-mono text-primary">{pcbResult.timestamp}</span>
                           </div>
                         )}
                       </div>
                       {pcbResult.podcastId && (
                         <Button onClick={handlePlayResult} className="shrink-0 w-full sm:w-auto mt-2 sm:mt-0 gap-2 shadow-lg">
                           <Play className="w-4 h-4 fill-current" />
-                          Play Segment
+                          {t('home.pcb.play')}
                         </Button>
                       )}
                     </div>
@@ -193,7 +207,7 @@ export default function Home() {
             {/* Admin visibility panel */}
             {isAdmin && (
               <div className="w-full max-w-5xl mx-auto mb-4 p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-6">
-                <span className="text-sm font-medium text-gray-600">Section visibility:</span>
+                <span className="text-sm font-medium text-gray-600">{t('home.admin.visibility')}</span>
 
                 <label className="flex items-center gap-2 cursor-pointer">
                   <div
@@ -202,7 +216,7 @@ export default function Home() {
                   >
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${showCarousel ? "translate-x-5" : "translate-x-1"}`} />
                   </div>
-                  <span className="text-sm text-gray-700">Questions Carousel</span>
+                  <span className="text-sm text-gray-700">{t('home.admin.carousel')}</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -212,10 +226,10 @@ export default function Home() {
                   >
                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${showFeatured ? "translate-x-5" : "translate-x-1"}`} />
                   </div>
-                  <span className="text-sm text-gray-700">Featured Q&A Cards</span>
+                  <span className="text-sm text-gray-700">{t('home.admin.featured')}</span>
                 </label>
 
-                <span className="text-xs text-gray-400 ml-auto">Only visible to admins</span>
+                <span className="text-xs text-gray-400 ml-auto">{t('home.admin.only')}</span>
               </div>
             )}
 
@@ -228,7 +242,7 @@ export default function Home() {
                 onMouseLeave={() => setPaused(false)}
               >
                 <p className="text-xs uppercase mb-4 text-center" style={{ color: "#dc2626", letterSpacing: "0.15em" }}>
-                  Questions explored in MAKEIT OR BREAKIT
+                  {t('home.carousel.label')}
                 </p>
                 {questionsLoading ? (
                   <div className="h-16 bg-gray-700 rounded-lg animate-pulse" />
@@ -244,7 +258,7 @@ export default function Home() {
                         {questions[activeQ]}
                       </p>
                       <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-red-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                        🔍 Ask PCB
+                        {t('home.carousel.ask_pcb')}
                       </span>
                     </div>
 
@@ -296,7 +310,7 @@ export default function Home() {
             {/* Featured Questions Section */}
             {showFeatured && (
               <div className="w-full max-w-5xl mx-auto mt-6 mb-10">
-                <h2 className="text-2xl font-bold text-center mb-6">Questions worth exploring</h2>
+                <h2 className="text-2xl font-bold text-center mb-6">{t('home.featured.title')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {(featuredData?.items ?? []).map((item, i) => (
                     <div key={i} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
@@ -309,7 +323,7 @@ export default function Home() {
                         }}
                         className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition self-start"
                       >
-                        <Play className="w-3 h-3 fill-current" /> Play Segment
+                        <Play className="w-3 h-3 fill-current" /> {t('home.featured.play')}
                       </button>
                     </div>
                   ))}
@@ -326,22 +340,19 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="flex items-end justify-between mb-12">
             <div>
-              <h2 className="font-display font-bold text-3xl md:text-4xl mb-3">Latest Episodes</h2>
-              <p className="text-muted-foreground text-lg">Fresh insights from industry leaders.</p>
+              <h2 className="font-display font-bold text-3xl md:text-4xl mb-3">{t('home.episodes.title')}</h2>
+              <p className="text-muted-foreground text-lg">{t('home.episodes.subtitle')}</p>
             </div>
             <div className="hidden sm:flex items-center gap-3">
               {isAdmin && (
-                <Button
-                  onClick={() => setShowAddModal(true)}
-                  className="gap-2"
-                >
+                <Button onClick={() => setShowAddModal(true)} className="gap-2">
                   <Plus className="w-4 h-4" />
-                  Add Episode
+                  {t('home.episodes.add')}
                 </Button>
               )}
               <Link href="/episodes">
                 <Button variant="ghost" className="group gap-2 text-primary hover:text-primary hover:bg-primary/10">
-                  View All <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  {t('home.episodes.view_all')} <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </Link>
             </div>
@@ -361,10 +372,10 @@ export default function Home() {
             </div>
           ) : (
             <div className="text-center py-20 text-muted-foreground">
-              <p className="text-lg mb-2">No episodes yet.</p>
+              <p className="text-lg mb-2">{t('home.episodes.none')}</p>
               {isAdmin && (
                 <Button onClick={() => setShowAddModal(true)} className="mt-4 gap-2">
-                  <Plus className="w-4 h-4" /> Add First Episode
+                  <Plus className="w-4 h-4" /> {t('home.episodes.add_first')}
                 </Button>
               )}
             </div>
@@ -374,11 +385,11 @@ export default function Home() {
           <div className="mt-12 sm:hidden flex flex-col gap-3">
             {isAdmin && (
               <Button onClick={() => setShowAddModal(true)} className="w-full gap-2">
-                <Plus className="w-4 h-4" /> Add Episode
+                <Plus className="w-4 h-4" /> {t('home.episodes.add')}
               </Button>
             )}
             <Link href="/episodes">
-              <Button variant="outline" className="w-full">View All Episodes</Button>
+              <Button variant="outline" className="w-full">{t('home.episodes.view_all_mobile')}</Button>
             </Link>
           </div>
         </div>
