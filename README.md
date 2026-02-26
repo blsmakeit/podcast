@@ -146,6 +146,7 @@ npm run dev
 ```
 
 The app runs at **http://localhost:5000**. Vite proxies all `/api/*` requests to Express — no CORS issues in development.
+To analyse the full chatbot implementation go to https://htmlpreview.github.io/?https://github.com/blsmakeit/podcast/edit/main/rag-chatbot-notion.html
 
 ### Scripts
 
