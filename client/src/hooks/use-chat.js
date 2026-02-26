@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useLanguage } from '@/hooks/use-language';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function useChat() {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: "Hi! I'm the MAKEIT OR BREAKIT assistant. Ask me anything about our episodes, the show, or how to get involved!",
-      actions: [
-        { label: 'Browse Episodes', href: '/episodes' },
-        { label: 'Contact Us', href: '/contact' },
-      ],
-    },
-  ]);
+  const { t } = useLanguage();
+
+  const [messages, setMessages] = useState(() => [{
+    role: 'assistant',
+    content: t('chat.welcome'),
+    actions: [
+      { label: t('chat.browse_episodes'), href: '/episodes' },
+      { label: t('chat.contact_us'), href: '/contact' },
+    ],
+  }]);
 
   const { mutate: sendMessage, isPending } = useMutation({
     mutationFn: async (userMessage) => {
@@ -45,14 +46,14 @@ export function useChat() {
     onError: () => {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, something went wrong. Please try again.',
+        content: t('chat.error'),
       }]);
     },
   });
 
   const clearChat = () => setMessages([{
     role: 'assistant',
-    content: "Hi! I'm the MAKEIT OR BREAKIT assistant. Ask me anything!",
+    content: t('chat.clear_welcome'),
   }]);
 
   return { messages, sendMessage, isPending, clearChat };

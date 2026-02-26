@@ -65,6 +65,13 @@ export const subscribers = pgTable("subscribers", {
   source: text("source").default("website"),
 });
 
+export const translations = pgTable("translations", {
+  id:  serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  en:  text("en").notNull(),
+  pt:  text("pt").notNull(),
+});
+
 export const episodeChunks = pgTable("episode_chunks", {
   id:         serial("id").primaryKey(),
   episodeId:  integer("episode_id").references(() => podcasts.id, { onDelete: "cascade" }),

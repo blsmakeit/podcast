@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPodcastSchema, generatedContent, siteSettings, subscribers, episodeChunks } from "@shared/schema";
+import { insertPodcastSchema, generatedContent, siteSettings, subscribers, episodeChunks, translations } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -493,6 +493,155 @@ actions and sources are optional — only include when relevant. Never include e
     } catch (err) {
       console.error("chat error:", err);
       res.status(500).json({ message: "Chat failed. Please try again." });
+    }
+  });
+
+  // GET /api/translations/:lang — return flat key→value object for a language
+  app.get("/api/translations/:lang", async (req, res) => {
+    const lang = req.params.lang as string;
+    if (lang !== "en" && lang !== "pt") {
+      return res.status(400).json({ message: "Language must be 'en' or 'pt'" });
+    }
+    try {
+      const rows = await db.select().from(translations);
+      const result: Record<string, string> = {};
+      for (const row of rows) {
+        result[row.key] = lang === "pt" ? row.pt : row.en;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("translations fetch error:", err);
+      res.status(500).json({ message: "Failed to fetch translations" });
+    }
+  });
+
+  // POST /api/translations/seed — upsert all UI strings (one-time setup)
+  app.post("/api/translations/seed", async (_req, res) => {
+    const seedData: Array<{ key: string; en: string; pt: string }> = [
+      // Nav
+      { key: "nav.home",      en: "Home",      pt: "Início" },
+      { key: "nav.episodes",  en: "Episodes",  pt: "Episódios" },
+      { key: "nav.about",     en: "About",     pt: "Sobre" },
+      { key: "nav.subscribe", en: "Subscribe", pt: "Subscrever" },
+      // Admin
+      { key: "admin.banner",       en: "BACKOFFICE MODE ACTIVE — You have admin controls enabled.", pt: "MODO BACKOFFICE ATIVO — Tem controlos de administrador ativados." },
+      { key: "admin.exit",         en: "Exit Admin",  pt: "Sair do Admin" },
+      { key: "admin.toggle_exit",  en: "Exit Admin",  pt: "Sair do Admin" },
+      { key: "admin.toggle_enter", en: "Admin",       pt: "Admin" },
+      // Footer
+      { key: "footer.tagline",   en: "Empowering creators and builders with cutting-edge technology and insights.", pt: "A capacitar criadores e construtores com tecnologia e insights de ponta." },
+      { key: "footer.platform",  en: "Platform",        pt: "Plataforma" },
+      { key: "footer.company",   en: "Company",         pt: "Empresa" },
+      { key: "footer.legal",     en: "Legal",           pt: "Legal" },
+      { key: "footer.episodes",  en: "Episodes",        pt: "Episódios" },
+      { key: "footer.series",    en: "Series",          pt: "Séries" },
+      { key: "footer.hosts",     en: "Hosts",           pt: "Apresentadores" },
+      { key: "footer.about",     en: "About Us",        pt: "Sobre Nós" },
+      { key: "footer.careers",   en: "Careers",         pt: "Carreiras" },
+      { key: "footer.contact",   en: "Contact",         pt: "Contacto" },
+      { key: "footer.privacy",   en: "Privacy Policy",  pt: "Política de Privacidade" },
+      { key: "footer.terms",     en: "Terms of Service", pt: "Termos de Serviço" },
+      { key: "footer.copyright", en: "© {year} MAKEIT.TECH. All rights reserved.", pt: "© {year} MAKEIT.TECH. Todos os direitos reservados." },
+      // Home
+      { key: "home.presents",        en: "MAKEIT.TECH presents", pt: "MAKEIT.TECH apresenta" },
+      { key: "home.subtitle",        en: "The show where founders, engineers and builders share what it really takes — or what breaks you.", pt: "O programa onde fundadores, engenheiros e construtores partilham o que realmente é preciso — ou o que os destrói." },
+      { key: "home.pcb.label",       en: "PCB — Podcast Content Browser", pt: "PCB — Navegador de Conteúdos Podcast" },
+      { key: "home.pcb.description", en: "Search inside MAKEIT OR BREAKIT episodes", pt: "Pesquisa dentro dos episódios MAKEIT OR BREAKIT" },
+      { key: "home.pcb.placeholder", en: "Ask PCB anything — topic, keyword, question…", pt: "Pergunta ao PCB — tema, palavra-chave, questão…" },
+      { key: "home.pcb.button",      en: "Ask PCB",           pt: "Perguntar ao PCB" },
+      { key: "home.pcb.found",       en: "PCB Found a Match", pt: "PCB Encontrou uma Correspondência" },
+      { key: "home.pcb.timestamp",   en: "Timestamp:",        pt: "Timestamp:" },
+      { key: "home.pcb.play",        en: "Play Segment",      pt: "Reproduzir Segmento" },
+      { key: "home.pcb.word_limit",  en: "Max 20 words per search", pt: "Máx. 20 palavras por pesquisa" },
+      { key: "home.carousel.label",   en: "Questions explored in MAKEIT OR BREAKIT", pt: "Questões exploradas no MAKEIT OR BREAKIT" },
+      { key: "home.carousel.ask_pcb", en: "🔍 Ask PCB", pt: "🔍 Perguntar ao PCB" },
+      { key: "home.featured.title",   en: "Questions worth exploring", pt: "Questões que valem a pena explorar" },
+      { key: "home.featured.play",    en: "Play Segment", pt: "Reproduzir Segmento" },
+      { key: "home.episodes.title",        en: "Latest Episodes",     pt: "Últimos Episódios" },
+      { key: "home.episodes.subtitle",     en: "Fresh insights from industry leaders.", pt: "Perspetivas frescas de líderes da indústria." },
+      { key: "home.episodes.view_all",     en: "View All",            pt: "Ver Todos" },
+      { key: "home.episodes.add",          en: "Add Episode",         pt: "Adicionar Episódio" },
+      { key: "home.episodes.add_first",    en: "Add First Episode",   pt: "Adicionar Primeiro Episódio" },
+      { key: "home.episodes.none",         en: "No episodes yet.",    pt: "Ainda não há episódios." },
+      { key: "home.episodes.view_all_mobile", en: "View All Episodes", pt: "Ver Todos os Episódios" },
+      { key: "home.admin.visibility", en: "Section visibility:", pt: "Visibilidade de secção:" },
+      { key: "home.admin.carousel",   en: "Questions Carousel",     pt: "Carrossel de Questões" },
+      { key: "home.admin.featured",   en: "Featured Q&A Cards",     pt: "Cartões Q&A em Destaque" },
+      { key: "home.admin.only",       en: "Only visible to admins", pt: "Apenas visível para admins" },
+      // Episodes
+      { key: "episodes.archive",             en: "Archive",           pt: "Arquivo" },
+      { key: "episodes.title",               en: "All Episodes",      pt: "Todos os Episódios" },
+      { key: "episodes.loading",             en: "Loading…",          pt: "A carregar…" },
+      { key: "episodes.count_one",           en: "1 episode available",     pt: "1 episódio disponível" },
+      { key: "episodes.count_many",          en: "{n} episodes available",  pt: "{n} episódios disponíveis" },
+      { key: "episodes.add",                 en: "Add Episode",       pt: "Adicionar Episódio" },
+      { key: "episodes.search_placeholder",  en: "Search episodes…",  pt: "Pesquisar episódios…" },
+      { key: "episodes.showing",             en: "Showing",           pt: "A mostrar" },
+      { key: "episodes.result_singular",     en: "result",            pt: "resultado" },
+      { key: "episodes.result_plural",       en: "results",           pt: "resultados" },
+      { key: "episodes.in_category",         en: "in \"{cat}\"",      pt: "em \"{cat}\"" },
+      { key: "episodes.for_query",           en: "for \"{q}\"",       pt: "para \"{q}\"" },
+      { key: "episodes.no_results",          en: "No episodes found", pt: "Nenhum episódio encontrado" },
+      { key: "episodes.no_results_query",    en: "No results for \"{q}\"",         pt: "Sem resultados para \"{q}\"" },
+      { key: "episodes.no_results_category", en: "No episodes in this category yet.", pt: "Ainda não há episódios nesta categoria." },
+      // About
+      { key: "about.badge",             en: "About MAKEIT.TECH Podcasts", pt: "Sobre MAKEIT.TECH Podcasts" },
+      { key: "about.hero.title1",       en: "We build things.",         pt: "Construímos coisas." },
+      { key: "about.hero.title2",       en: "Then we talk about it.",   pt: "Depois falamos sobre isso." },
+      { key: "about.hero.subtitle",     en: "MAKEIT.TECH Podcasts & Videocasts is the media arm of MAKEIT.TECH — a company founded on hardware engineering and driven by a passion for building the future.", pt: "MAKEIT.TECH Podcasts & Videocasts é o braço mediático da MAKEIT.TECH — uma empresa fundada em engenharia de hardware e impulsionada pela paixão de construir o futuro." },
+      { key: "about.browse",            en: "Browse Episodes", pt: "Explorar Episódios" },
+      { key: "about.subscribe",         en: "Subscribe",       pt: "Subscrever" },
+      { key: "about.pillars.title",     en: "What We Stand For",                     pt: "O Que Defendemos" },
+      { key: "about.pillars.subtitle",  en: "Four pillars that define everything we create.", pt: "Quatro pilares que definem tudo o que criamos." },
+      { key: "about.pillar1.title", en: "Born from Hardware",       pt: "Nascido do Hardware" },
+      { key: "about.pillar1.desc",  en: "MAKEIT.TECH started as a hardware engineering company. PCB stands for both Printed Circuit Board — our roots — and Podcast Content Browser — our future.", pt: "A MAKEIT.TECH começou como uma empresa de engenharia de hardware. PCB significa tanto Printed Circuit Board — as nossas raízes — como Podcast Content Browser — o nosso futuro." },
+      { key: "about.pillar2.title", en: "Honest Conversations",     pt: "Conversas Honestas" },
+      { key: "about.pillar2.desc",  en: "We interview founders, engineers, and designers who are building real things. No fluff, no hype — just genuine insights from people doing the work.", pt: "Entrevistamos fundadores, engenheiros e designers que constroem coisas reais. Sem ruído, sem hype — apenas insights genuínos de pessoas que fazem o trabalho." },
+      { key: "about.pillar3.title", en: "AI-Powered Discovery",     pt: "Descoberta com IA" },
+      { key: "about.pillar3.desc",  en: "Our PCB feature uses cutting-edge AI to scan every episode and take you to the exact moment you're looking for — no more scrubbing through hours of content.", pt: "O nosso PCB usa IA de ponta para analisar cada episódio e levá-lo ao momento exato que procura — sem mais horas de scrubbing." },
+      { key: "about.pillar4.title", en: "A Community of Builders",  pt: "Uma Comunidade de Construtores" },
+      { key: "about.pillar4.desc",  en: "We're building a global community of engineers, entrepreneurs, and creatives who are passionate about turning ideas into reality.", pt: "Estamos a construir uma comunidade global de engenheiros, empreendedores e criativos apaixonados por transformar ideias em realidade." },
+      { key: "about.cta.title",    en: "Ready to dive in?",  pt: "Pronto para mergulhar?" },
+      { key: "about.cta.subtitle", en: "Subscribe to stay updated with our latest episodes, and use PCB to find exactly what you need — instantly.", pt: "Subscreva para ficar atualizado com os nossos últimos episódios e use o PCB para encontrar exatamente o que precisa — instantaneamente." },
+      { key: "about.cta.button",   en: "Subscribe Now",      pt: "Subscrever Agora" },
+      // Subscribe
+      { key: "subscribe.badge",            en: "Never Miss an Episode",  pt: "Nunca Perca um Episódio" },
+      { key: "subscribe.title1",           en: "Stay in the",            pt: "Fique a par" },
+      { key: "subscribe.title2",           en: "loop.",                  pt: "de tudo." },
+      { key: "subscribe.subtitle",         en: "Subscribe to MAKEIT.TECH Podcasts and get notified whenever a new episode drops.", pt: "Subscreva o MAKEIT.TECH Podcasts e seja notificado sempre que um novo episódio for publicado." },
+      { key: "subscribe.success.title",    en: "You're subscribed!",     pt: "Subscreveu!" },
+      { key: "subscribe.success.desc",     en: "Thanks for subscribing. We'll notify you when new episodes are published.", pt: "Obrigado por subscrever. Notificamo-lo quando novos episódios forem publicados." },
+      { key: "subscribe.button",           en: "Subscribe Free",         pt: "Subscrever Gratuitamente" },
+      { key: "subscribe.button_loading",   en: "Subscribing…",           pt: "A subscrever…" },
+      { key: "subscribe.no_spam",          en: "No spam. Unsubscribe at any time.", pt: "Sem spam. Cancele a subscrição a qualquer momento." },
+      { key: "subscribe.benefits.title",   en: "What you'll get",        pt: "O que vai receber" },
+      { key: "subscribe.benefit1", en: "New episode notifications delivered to your inbox", pt: "Notificações de novos episódios entregues na sua caixa de entrada" },
+      { key: "subscribe.benefit2", en: "Exclusive behind-the-scenes content",               pt: "Conteúdo exclusivo dos bastidores" },
+      { key: "subscribe.benefit3", en: "Early access to special series",                    pt: "Acesso antecipado a séries especiais" },
+      { key: "subscribe.benefit4", en: "Monthly digest with key highlights",                pt: "Digest mensal com os principais destaques" },
+      // Chat
+      { key: "chat.bubble",          en: "Ask me anything ✨",        pt: "Pergunte-me qualquer coisa ✨" },
+      { key: "chat.header.subtitle", en: "Ask me about episodes or the show", pt: "Pergunte-me sobre episódios ou o programa" },
+      { key: "chat.clear",           en: "Clear",                     pt: "Limpar" },
+      { key: "chat.placeholder",     en: "Ask me anything...",        pt: "Pergunte-me qualquer coisa..." },
+      { key: "chat.welcome",         en: "Hi! I'm the MAKEIT OR BREAKIT assistant. Ask me anything about our episodes, the show, or how to get involved!", pt: "Olá! Sou o assistente do MAKEIT OR BREAKIT. Pergunte-me qualquer coisa sobre os nossos episódios, o programa ou como se envolver!" },
+      { key: "chat.browse_episodes", en: "Browse Episodes",           pt: "Ver Episódios" },
+      { key: "chat.contact_us",      en: "Contact Us",                pt: "Contacte-nos" },
+      { key: "chat.clear_welcome",   en: "Hi! I'm the MAKEIT OR BREAKIT assistant. Ask me anything!", pt: "Olá! Sou o assistente do MAKEIT OR BREAKIT. Pergunte-me qualquer coisa!" },
+      { key: "chat.error",           en: "Sorry, something went wrong. Please try again.", pt: "Desculpe, algo correu mal. Por favor tente novamente." },
+      { key: "chat.word_limit",      en: "Max 100 words per message", pt: "Máx. 100 palavras por mensagem" },
+    ];
+
+    try {
+      for (const row of seedData) {
+        await db.insert(translations)
+          .values(row)
+          .onConflictDoUpdate({ target: translations.key, set: { en: row.en, pt: row.pt } });
+      }
+      res.json({ success: true, count: seedData.length });
+    } catch (err) {
+      console.error("translations seed error:", err);
+      res.status(500).json({ message: "Seed failed" });
     }
   });
 
