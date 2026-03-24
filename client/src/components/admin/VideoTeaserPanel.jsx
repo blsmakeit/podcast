@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef(null);
+  const cookiesInputRef = useRef(null);
   const [startSeconds, setStartSeconds] = useState(selectedDraft?.teaserTimestampSeconds ?? 0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -80,6 +81,31 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
       toast({ title: "Generation failed", description: err.message, variant: "destructive" });
     },
   });
+
+  const handleReset = useCallback(async () => {
+    await resetTeaser();
+    qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
+  }, [resetTeaser, qc, campaignId]);
+
+  const handleCookiesUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("cookies", file);
+    try {
+      const res = await fetch(`${API_BASE}/api/social-media/admin/upload-yt-cookies`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      toast({ title: "Cookies uploaded", description: "Click Download to retry the YouTube download." });
+      await handleReset();
+    } catch (err) {
+      toast({ title: "Cookies upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      if (cookiesInputRef.current) cookiesInputRef.current.value = "";
+    }
+  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -273,32 +299,65 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
 
         {/* Error */}
         {hasFailed && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">Generation failed</p>
-              <p className="text-xs">{teaserStatus.error}</p>
-              <div className="flex gap-2 mt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => generateTeaser()}
-                  className="gap-1.5 h-7 text-xs"
-                >
-                  <RefreshCw className="w-3 h-3" /> Retry
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => resetTeaser()}
-                  disabled={isResetting}
-                  className="gap-1.5 h-7 text-xs"
-                >
-                  {isResetting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                  Reset status
-                </Button>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Generation failed</p>
+                <p className="text-xs">{teaserStatus.error}</p>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => generateTeaser()}
+                    className="gap-1.5 h-7 text-xs"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Retry
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleReset}
+                    disabled={isResetting}
+                    className="gap-1.5 h-7 text-xs"
+                  >
+                    {isResetting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                    Reset status
+                  </Button>
+                </div>
               </div>
             </div>
+
+            {/* Bot / auth error — offer cookies upload */}
+            {(teaserStatus?.error?.includes("bot") || teaserStatus?.error?.includes("Sign in")) && (
+              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-2">
+                <p className="text-xs font-semibold text-amber-800">YouTube requires authentication</p>
+                <p className="text-xs text-amber-700">
+                  Export your YouTube cookies and upload them to enable auto-download.
+                  Or upload your MP4 manually below.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="file"
+                    accept=".txt"
+                    onChange={handleCookiesUpload}
+                    className="hidden"
+                    ref={cookiesInputRef}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => cookiesInputRef.current?.click()}
+                  >
+                    Upload cookies.txt
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleReset} disabled={isResetting}>
+                    {isResetting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                    Reset &amp; retry
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

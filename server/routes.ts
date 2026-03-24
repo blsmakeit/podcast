@@ -1222,8 +1222,8 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
     });
   });
 
-  // POST /api/social-media/admin/upload-cookies
-  app.post("/api/social-media/admin/upload-cookies", (req, res) => {
+  // POST /api/social-media/admin/upload-yt-cookies
+  app.post("/api/social-media/admin/upload-yt-cookies", (req, res) => {
     uploadCookies.single("cookies")(req, res, (err) => {
       if (err) return res.status(400).json({ message: err.message });
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -1371,6 +1371,7 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
         '-o', outputFile,
         '--no-playlist',
         '--socket-timeout', '30',
+        '--retries', '3',
         '--progress',
         '--newline',
         ...(cookiesExist ? ['--cookies', cookiesPath] : []),

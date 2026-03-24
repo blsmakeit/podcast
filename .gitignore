@@ -20,5 +20,5 @@ uploads/media/*
 uploads/videos/*
 !uploads/videos/.gitkeep
 
-# Server assets — cookies and other secrets, never commit
-server/assets/
+# Server assets — cookies only, keep fonts/ tracked
+server/assets/youtube-cookies.txt
