@@ -747,19 +747,54 @@ actions and sources are optional — only include when relevant. Never include e
     }
   });
 
+  // POST /api/social-media/image-posts/improve-description
+  app.post("/api/social-media/image-posts/improve-description", async (req, res) => {
+    try {
+      const { description } = req.body as { description: string };
+      if (!description?.trim()) return res.status(400).json({ message: "description is required" });
+
+      const IMPROVE_MODEL = "claude-sonnet-4-6";
+      const claudeResponse = await anthropic.messages.create({
+        model: IMPROVE_MODEL,
+        max_tokens: 500,
+        system: `You are a social media content strategist for MAKEIT.TECH, a hardware R&D and AI company from Portugal. The admin gives you a brief description of a company achievement or moment. Rewrite it into a richer, more compelling context paragraph (max 150 words) that captures the achievement, emotion, and relevance for a tech founder and engineering audience. Keep it factual and authentic. Return ONLY the improved text. No JSON, no markdown, no preamble.`,
+        messages: [{ role: "user", content: `Original description: ${description}` }],
+      });
+
+      logUsage({
+        model: IMPROVE_MODEL,
+        endpoint: "description_improvement",
+        inputTokens: claudeResponse.usage.input_tokens,
+        outputTokens: claudeResponse.usage.output_tokens,
+      });
+
+      const improvedDescription = claudeResponse.content[0].type === "text"
+        ? claudeResponse.content[0].text.trim()
+        : description;
+
+      res.json({ success: true, data: { improvedDescription } });
+    } catch (err) {
+      console.error("improve description error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // POST /api/social-media/campaigns/image-only
   app.post("/api/social-media/campaigns/image-only", async (req, res) => {
     try {
-      const { description, imageUrls, postTypes } = req.body as {
+      const { description, imageUrls, postTypes, platforms } = req.body as {
         description?: string;
         imageUrls?: string[];
         postTypes?: string[];
+        platforms?: string[];
       };
       const campaign = await storage.createCampaign({
         inputType: "image_only",
         stage: "production",
         notes: description,
       });
+
+      // Create media assets for each image
       if (imageUrls?.length) {
         for (const url of imageUrls) {
           await storage.createMediaAsset({
@@ -770,7 +805,22 @@ actions and sources are optional — only include when relevant. Never include e
           });
         }
       }
-      res.status(201).json({ success: true, data: campaign });
+
+      // Create not_generated post slots for each postType × platform
+      const targetPostTypes = postTypes?.length ? postTypes : ["teaser", "guest", "insight", "launch"];
+      const targetPlatforms = platforms?.length ? platforms : ["linkedin", "instagram"];
+      for (const postType of targetPostTypes) {
+        for (const platform of targetPlatforms) {
+          await storage.createOrUpdatePost({
+            campaignId: campaign.id,
+            postType,
+            platform,
+            status: "not_generated",
+          });
+        }
+      }
+
+      res.status(201).json({ success: true, data: { campaignId: campaign.id } });
     } catch (err) {
       console.error("image-only campaign error:", err);
       res.status(500).json({ message: "Internal server error" });
@@ -980,21 +1030,32 @@ Analyse all key moments. Return a JSON array of exactly 5 objects, ranked by soc
 
       const campaign = await storage.getCampaignById(id);
       if (!campaign) return res.status(404).json({ message: "Campaign not found" });
-      if (!campaign.episode) return res.status(400).json({ message: "Campaign has no linked episode" });
 
-      const episode = campaign.episode;
-      const drafts = await storage.getDraftsByCampaignId(id);
-      const selectedDraft = drafts.find((d) => d.isSelected) ?? drafts[0];
+      const isImageOnly = campaign.inputType === "image_only";
 
-      if (!selectedDraft) return res.status(400).json({ message: "No draft selected" });
+      let baseContext: string;
 
-      const guestName = episode.guestName ?? "";
-      const guestRole = episode.guestRole ?? "";
-      const transcriptContext = episode.rawTranscript
-        ? `\nTranscript context:\n${episode.rawTranscript.substring(0, 4000)}`
-        : "";
+      if (isImageOnly) {
+        baseContext = `This is an image-only social media post for MAKEIT.TECH.
+There is no video episode — this post is about a company moment or achievement.
 
-      const baseContext = `Episode: "${episode.title}"
+Company context: ${campaign.notes ?? "No description provided"}`;
+      } else {
+        if (!campaign.episode) return res.status(400).json({ message: "Campaign has no linked episode" });
+
+        const episode = campaign.episode;
+        const drafts = await storage.getDraftsByCampaignId(id);
+        const selectedDraft = drafts.find((d) => d.isSelected) ?? drafts[0];
+
+        if (!selectedDraft) return res.status(400).json({ message: "No draft selected" });
+
+        const guestName = episode.guestName ?? "";
+        const guestRole = episode.guestRole ?? "";
+        const transcriptContext = episode.rawTranscript
+          ? `\nTranscript context:\n${episode.rawTranscript.substring(0, 4000)}`
+          : "";
+
+        baseContext = `Episode: "${episode.title}"
 Guest: ${guestName}${guestRole ? `, ${guestRole}` : ""}
 Category: ${episode.category}
 Description: ${episode.description}
@@ -1004,6 +1065,7 @@ Theme: ${selectedDraft.theme}
 Hook: ${selectedDraft.hook}
 Timestamp: ${selectedDraft.timestamp ?? "N/A"}
 ${transcriptContext}`;
+      }
 
       const postTypeInstructions: Record<string, string> = {
         teaser: `Write a POST TEASER — "O episódio está no ar" (The episode is live).
@@ -1072,7 +1134,7 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
         inputTokens: claudeResponse.usage.input_tokens,
         outputTokens: claudeResponse.usage.output_tokens,
         campaignId: id,
-        episodeId: campaign.episode?.id,
+        episodeId: isImageOnly ? undefined : campaign.episode?.id,
       });
 
       const block = claudeResponse.content[0];

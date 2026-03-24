@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
@@ -7,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, AlertCircle, Share2, ImagePlus, CheckCircle2, BarChart2 } from "lucide-react";
+import ImageUploadPanel from "@/components/admin/ImageUploadPanel";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -98,11 +100,15 @@ export default function SocialMediaManager() {
     },
   });
 
+  const [isImagePanelOpen, setIsImagePanelOpen] = useState(false);
+
   const episodes = episodesRaw ?? [];
   const campaigns = campaignsRaw ?? [];
   const unprocessedCount = unprocessedData?.count ?? 0;
   const unprocessedEpisodes = unprocessedData?.episodes ?? [];
   const publishedCampaigns = publishedData ?? [];
+
+  const imageCampaigns = campaigns.filter((c) => c.inputType === "image_only");
 
   // Map campaign by episodeId for quick lookup
   const campaignByEpisodeId = {};
@@ -221,19 +227,53 @@ export default function SocialMediaManager() {
           </TabsContent>
 
           <TabsContent value="image-posts">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Image-Only Campaigns</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center py-10 text-center gap-4">
-                <ImagePlus className="w-12 h-12 text-muted-foreground/40" />
-                <p className="text-muted-foreground">Create social media content from images without a video episode.</p>
-                <Button variant="outline" className="gap-2" disabled>
-                  <Plus className="w-4 h-4" />
-                  New Image Post (Coming Soon)
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <Button onClick={() => setIsImagePanelOpen(true)} className="gap-2">
+                <Plus className="w-4 h-4" /> New Image Post
+              </Button>
+
+              {imageCampaigns.length > 0 ? (
+                <div className="space-y-3">
+                  {imageCampaigns.map((campaign) => {
+                    const { label: actionLabel, action } = getActionForStage(null, campaign);
+                    return (
+                      <Card key={campaign.id} className="hover:shadow-md transition-shadow">
+                        <CardContent className="py-4 px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <ImagePlus className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <p className="font-semibold text-sm truncate">
+                                {campaign.notes ? campaign.notes.slice(0, 60) + (campaign.notes.length > 60 ? "…" : "") : `Image Post #${campaign.id}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">Image Post</Badge>
+                              <StageBadge stage={campaign.stage} />
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={action}
+                            className="shrink-0"
+                          >
+                            {actionLabel}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-10 text-center text-muted-foreground">
+                    <ImagePlus className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p>No image posts yet.</p>
+                    <p className="text-sm">Create posts from photos without a video episode.</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="published">
@@ -282,6 +322,15 @@ export default function SocialMediaManager() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <ImageUploadPanel
+        isOpen={isImagePanelOpen}
+        onClose={() => setIsImagePanelOpen(false)}
+        onSuccess={() => {
+          setIsImagePanelOpen(false);
+          qc.invalidateQueries({ queryKey: ["/api/social-media/campaigns"] });
+        }}
+      />
     </Layout>
   );
 }

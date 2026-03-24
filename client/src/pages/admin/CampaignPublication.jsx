@@ -259,6 +259,35 @@ export default function CampaignPublication() {
               </div>
             </div>
 
+            {/* Uploaded Images (image-only campaigns) */}
+            {assets.filter((a) => a.assetType === "manual_image").length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold mb-3">Uploaded Images</h2>
+                <div className="border rounded-lg p-4 space-y-3">
+                  <div className="flex flex-wrap gap-3">
+                    {assets
+                      .filter((a) => a.assetType === "manual_image")
+                      .map((asset) => (
+                        <div key={asset.id} className="space-y-1.5">
+                          <img
+                            src={asset.fileUrl}
+                            alt={asset.fileName}
+                            className="w-28 h-28 rounded-md object-cover border"
+                          />
+                          <a
+                            href={asset.fileUrl}
+                            download={asset.fileName}
+                            className="block text-xs text-primary hover:underline text-center"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Background Generator */}
             <div className="mb-8">
               <BackgroundPanel campaignId={campaignId} campaign={campaign} />
