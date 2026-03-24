@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Play, Download, Loader2, AlertCircle, ExternalLink, RefreshCw } from "lucide-react";
+import { Upload, Play, Download, Loader2, AlertCircle, ExternalLink, RefreshCw, Youtube } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -23,6 +23,9 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const [startSeconds, setStartSeconds] = useState(selectedDraft?.teaserTimestampSeconds ?? 0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [ytUrl, setYtUrl] = useState("");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   const { data: teaserStatus, isLoading: loadingStatus } = useQuery({
     queryKey: [`/api/social-media/campaigns/${campaignId}/teaser/status`],
@@ -90,6 +93,50 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
     }
   };
 
+  const handleYoutubeDownload = async () => {
+    if (!ytUrl.trim()) return;
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    try {
+      const res = await fetch(`${API_BASE}/api/social-media/campaigns/${campaignId}/teaser/download-youtube`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeUrl: ytUrl.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Download failed" }));
+        throw new Error(err.message);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const evt = JSON.parse(line.slice(5).trim());
+            if (evt.progress != null) setDownloadProgress(evt.progress);
+            if (evt.done) {
+              setDownloadProgress(100);
+              qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
+              toast({ title: "YouTube video downloaded", description: "Source video is ready." });
+            }
+            if (evt.error) throw new Error(evt.error);
+          } catch {}
+        }
+      }
+    } catch (err) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const isProcessing = teaserStatus?.status === "queued" || teaserStatus?.status === "processing";
   const isDone = teaserStatus?.status === "completed" && teaserStatus?.landscapeUrl;
   const hasFailed = teaserStatus?.status === "failed";
@@ -101,6 +148,42 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
         <CardTitle className="text-base">Video Teaser Clip (20s)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* YouTube auto-download */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Auto-download from YouTube</p>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              placeholder="https://youtube.com/watch?v=..."
+              value={ytUrl}
+              onChange={(e) => setYtUrl(e.target.value)}
+              className="h-8 text-sm"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleYoutubeDownload}
+              disabled={isDownloading || !ytUrl.trim()}
+              className="gap-1.5 shrink-0"
+            >
+              {isDownloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Youtube className="w-3.5 h-3.5" />}
+              Download
+            </Button>
+          </div>
+          {isDownloading && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Downloading…</span>
+                <span className="font-mono">{downloadProgress}%</span>
+              </div>
+              <Progress value={downloadProgress} className="h-1.5" />
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Requires yt-dlp installed on server. Or upload manually below.</p>
+        </div>
+
+        <div className="border-t" />
+
         {/* Upload area */}
         <div
           className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"

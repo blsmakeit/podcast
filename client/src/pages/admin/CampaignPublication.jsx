@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CheckCircle2, Loader2, Download, ExternalLink } from "lucide-react";
 import CampaignProgressBar from "@/components/admin/CampaignProgressBar";
 import PlatformExportCard from "@/components/admin/PlatformExportCard";
+import BackgroundPanel from "@/components/admin/BackgroundPanel";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -254,6 +255,11 @@ export default function CampaignPublication() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Background Generator */}
+            <div className="mb-8">
+              <BackgroundPanel campaignId={campaignId} campaign={campaign} />
             </div>
 
             {/* Bottom actions */}

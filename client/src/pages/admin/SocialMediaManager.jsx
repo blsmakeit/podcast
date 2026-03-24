@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, AlertCircle, Share2, ImagePlus } from "lucide-react";
+import { Plus, AlertCircle, Share2, ImagePlus, CheckCircle2, BarChart2 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -88,10 +88,21 @@ export default function SocialMediaManager() {
     },
   });
 
+  const { data: publishedData } = useQuery({
+    queryKey: ["/api/social-media/metrics/published-posts"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/social-media/metrics/published-posts`);
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.data ?? [];
+    },
+  });
+
   const episodes = episodesRaw ?? [];
   const campaigns = campaignsRaw ?? [];
   const unprocessedCount = unprocessedData?.count ?? 0;
   const unprocessedEpisodes = unprocessedData?.episodes ?? [];
+  const publishedCampaigns = publishedData ?? [];
 
   // Map campaign by episodeId for quick lookup
   const campaignByEpisodeId = {};
@@ -111,9 +122,14 @@ export default function SocialMediaManager() {
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="flex items-center gap-3 mb-6">
-          <Share2 className="w-7 h-7 text-primary" />
-          <h1 className="text-3xl font-display font-bold">Social Media Manager</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Share2 className="w-7 h-7 text-primary" />
+            <h1 className="text-3xl font-display font-bold">Social Media Manager</h1>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setLocation("/admin/metrics")} className="gap-1.5">
+            <BarChart2 className="w-4 h-4" /> Metrics
+          </Button>
         </div>
 
         {/* Notification Banner */}
@@ -146,6 +162,14 @@ export default function SocialMediaManager() {
           <TabsList className="mb-6">
             <TabsTrigger value="episodes">Episodes</TabsTrigger>
             <TabsTrigger value="image-posts">Image Posts</TabsTrigger>
+            <TabsTrigger value="published">
+              Published
+              {publishedCampaigns.length > 0 && (
+                <span className="ml-1.5 bg-green-600 text-white text-xs rounded-full px-1.5 py-0.5 font-mono">
+                  {publishedCampaigns.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="episodes">
@@ -210,6 +234,51 @@ export default function SocialMediaManager() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="published">
+            {publishedCampaigns.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                  <p>No completed campaigns yet.</p>
+                  <p className="text-xs mt-1">Campaigns appear here once posts are marked as published.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {publishedCampaigns.map((c) => (
+                  <Card key={c.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="py-4 px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm truncate">
+                            {c.episode?.title ?? `Campaign #${c.id}`}
+                          </p>
+                          {c.episode?.guestName && (
+                            <span className="text-xs text-muted-foreground">• {c.episode.guestName}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <StageBadge stage={c.stage} />
+                          <span className="text-xs text-muted-foreground">
+                            {c.publishedCount} post{c.publishedCount !== 1 ? "s" : ""} published
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setLocation(`/admin/social-media/campaign/${c.id}/publication`)}
+                        className="shrink-0"
+                      >
+                        View
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
