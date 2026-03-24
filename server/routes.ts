@@ -14,20 +14,46 @@ import {
   draftSuggestions,
   mediaPosts,
   mediaAssets,
+  apiUsageLogs,
 } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Resend } from "resend";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc, sum } from "drizzle-orm";
 import { companyKnowledge } from "./knowledge/company";
+import { calcCostMicros } from "./utils/claudePricing";
+import { generateBackgroundSvg } from "./utils/backgroundGenerator";
+import { ADMIN_WORKFLOW_KNOWLEDGE } from "./data/adminKnowledge";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ── Claude usage logger (fire-and-forget, never throws) ───────────────────
+function logUsage(opts: {
+  model: string;
+  endpoint: string;
+  inputTokens: number;
+  outputTokens: number;
+  campaignId?: number;
+  episodeId?: number;
+}) {
+  const costUsd = calcCostMicros(opts.model, opts.inputTokens, opts.outputTokens);
+  storage.createApiUsageLog({
+    provider: "anthropic",
+    model: opts.model,
+    endpoint: opts.endpoint,
+    inputTokens: opts.inputTokens,
+    outputTokens: opts.outputTokens,
+    costUsd,
+    campaignId: opts.campaignId ?? null,
+    episodeId: opts.episodeId ?? null,
+  }).catch((e) => console.warn("[logUsage] failed:", (e as Error).message));
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -432,8 +458,9 @@ Return ONLY a valid JSON object with exactly these fields:
 
   // POST /api/chat — RAG chatbot
   app.post("/api/chat", async (req, res) => {
-    const { messages } = req.body as {
+    const { messages, isAdmin } = req.body as {
       messages: Array<{ role: "user" | "assistant"; content: string }>;
+      isAdmin?: boolean;
     };
 
     if (!messages?.length) {
@@ -454,8 +481,12 @@ Return ONLY a valid JSON object with exactly these fields:
           ).join("\n\n")
         : "No specific episode content found for this query.";
 
-      const systemPrompt = `You are the MAKEIT OR BREAKIT chatbot — a helpful assistant for the MAKEIT OR BREAKIT podcast platform.
+      const adminSection = isAdmin
+        ? `\n${ADMIN_WORKFLOW_KNOWLEDGE}\n`
+        : "";
 
+      const systemPrompt = `You are the MAKEIT OR BREAKIT chatbot — a helpful assistant for the MAKEIT OR BREAKIT podcast platform.
+${adminSection}
 COMPANY & SHOW KNOWLEDGE:
 ${companyKnowledge}
 
@@ -471,6 +502,7 @@ BEHAVIOUR RULES:
 - If no episode chunks were retrieved but the question is about topics that might be covered in the show (tech, entrepreneurship, hardware, startups, AI, design, innovation), still try to answer based on the company knowledge and suggest using the PCB search bar for specific timestamps. Only say you don't know if the topic is completely unrelated to tech, entrepreneurship or innovation
 - Keep answers concise and conversational — 2-4 sentences max unless detail is needed
 - ALWAYS respond in the same language the user writes in (Portuguese or English)
+${isAdmin ? "- You also have detailed knowledge of the Social Media Manager admin workflow — answer admin questions about the pipeline, post types, video teaser generation, and metrics." : ""}
 
 RESPONSE FORMAT — return ONLY valid JSON:
 {
@@ -480,11 +512,19 @@ RESPONSE FORMAT — return ONLY valid JSON:
 }
 actions and sources are optional — only include when relevant. Never include empty arrays.`;
 
+      const MODEL = "claude-sonnet-4-6";
       const claudeResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
+        model: MODEL,
         max_tokens: 1024,
         system: systemPrompt,
         messages: messages.slice(-10),
+      });
+
+      logUsage({
+        model: MODEL,
+        endpoint: "chat",
+        inputTokens: claudeResponse.usage.input_tokens,
+        outputTokens: claudeResponse.usage.output_tokens,
       });
 
       const block = claudeResponse.content[0];
@@ -832,11 +872,21 @@ Analyse all key moments. Return a JSON array of exactly 5 objects, ranked by soc
   "teaserReason": ("one sentence why this is the best 20s segment to clip")
 }`;
 
+      const DRAFT_MODEL = "claude-sonnet-4-6";
       const claudeResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
+        model: DRAFT_MODEL,
         max_tokens: 8000,
         system: `You are a social media content strategist for MAKEIT.TECH, a hardware R&D and AI company from Portugal. The show is MAKEITorBREAKIT — a 2.5-hour videocast about technology, AI, hardware, and entrepreneurship. Target audience: tech founders, engineers, makers. Brand tone: bold, expert, human, optimistic. Brand colors: Red #D42B2B, White #FFFFFF, Black #0A0A0A. Never use the word "quote" — use "key insight" instead, as content is AI-paraphrased unless raw transcript is provided. Return ONLY valid JSON. No markdown fences. No explanation.`,
         messages: [{ role: "user", content: userMessage }],
+      });
+
+      logUsage({
+        model: DRAFT_MODEL,
+        endpoint: "draft-generation",
+        inputTokens: claudeResponse.usage.input_tokens,
+        outputTokens: claudeResponse.usage.output_tokens,
+        campaignId: id,
+        episodeId: campaign.episode?.id,
       });
 
       const block = claudeResponse.content[0];
@@ -1007,11 +1057,21 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
       const instructions = postTypeInstructions[postType];
       if (!instructions) return res.status(400).json({ message: `Unknown post type: ${postType}` });
 
+      const POST_MODEL = "claude-sonnet-4-6";
       const claudeResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
+        model: POST_MODEL,
         max_tokens: 4096,
         system: `You are a social media content strategist for MAKEIT.TECH. Write engaging content for the MAKEITorBREAKIT podcast. Brand tone: bold, expert, human, optimistic. Never use the word "quote" — always say "key insight". Return ONLY valid JSON. No markdown fences.`,
         messages: [{ role: "user", content: `${baseContext}\n\n${instructions}` }],
+      });
+
+      logUsage({
+        model: POST_MODEL,
+        endpoint: `post-generation:${postType}`,
+        inputTokens: claudeResponse.usage.input_tokens,
+        outputTokens: claudeResponse.usage.output_tokens,
+        campaignId: id,
+        episodeId: campaign.episode?.id,
       });
 
       const block = claudeResponse.content[0];
@@ -1251,6 +1311,190 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
         },
       });
     } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ─── TASK 1: yt-dlp YouTube download ─────────────────────────────────────
+  app.post("/api/social-media/campaigns/:id/teaser/download-youtube", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+
+      const { youtubeUrl } = req.body as { youtubeUrl: string };
+      if (!youtubeUrl) return res.status(400).json({ message: "youtubeUrl is required" });
+
+      const campaign = await storage.getCampaignById(id);
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+
+      const VIDEO_STORAGE_PATH = process.env.VIDEO_STORAGE_PATH || "./uploads/videos";
+      const { spawn } = await import("child_process");
+      const path = await import("path");
+      const outputFile = path.resolve(VIDEO_STORAGE_PATH, `${id}-source.mp4`);
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const proc = spawn("yt-dlp", [
+        "--no-playlist",
+        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "--merge-output-format", "mp4",
+        "--progress",
+        "--newline",
+        "-o", outputFile,
+        youtubeUrl,
+      ]);
+
+      let lastProgress = 0;
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        const line = chunk.toString();
+        const match = line.match(/(\d+(?:\.\d+)?)%/);
+        if (match) {
+          const pct = Math.floor(Number(match[1]));
+          if (pct !== lastProgress) {
+            lastProgress = pct;
+            res.write(`data: ${JSON.stringify({ progress: pct })}\n\n`);
+          }
+        }
+      });
+
+      proc.stderr.on("data", (chunk: Buffer) => {
+        const line = chunk.toString();
+        const match = line.match(/(\d+(?:\.\d+)?)%/);
+        if (match) {
+          const pct = Math.floor(Number(match[1]));
+          if (pct !== lastProgress) {
+            lastProgress = pct;
+            res.write(`data: ${JSON.stringify({ progress: pct })}\n\n`);
+          }
+        }
+      });
+
+      proc.on("close", async (code: number) => {
+        if (code === 0) {
+          const sourceVideoUrl = `/uploads/videos/${id}-source.mp4`;
+          await storage.updateCampaign(id, { sourceVideoUrl });
+          res.write(`data: ${JSON.stringify({ done: true, sourceVideoUrl })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ error: "yt-dlp exited with code " + code })}\n\n`);
+        }
+        res.end();
+      });
+
+      proc.on("error", (err: Error) => {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.end();
+      });
+    } catch (err) {
+      console.error("yt-dlp download error:", err);
+      res.status(500).json({ message: "Download failed" });
+    }
+  });
+
+  // ─── TASK 3: PCB Background generator ────────────────────────────────────
+
+  // GET /api/social-media/backgrounds/preview — returns SVG for a given style + seed
+  app.get("/api/social-media/backgrounds/preview", (req, res) => {
+    const style = (req.query.style as string) || "aurora";
+    const seed = parseInt((req.query.seed as string) || "42", 10);
+    const svg = generateBackgroundSvg({ style: style as any, seed, width: 1200, height: 630 });
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.send(svg);
+  });
+
+  // POST /api/social-media/campaigns/:id/background/generate — save style+seed to campaign
+  app.post("/api/social-media/campaigns/:id/background/generate", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+      const { style, seed } = req.body as { style?: string; seed?: number };
+      const finalSeed = seed ?? id; // default: use campaign id as seed for determinism
+      const finalStyle = style || "aurora";
+      const url = `/api/social-media/backgrounds/preview?style=${finalStyle}&seed=${finalSeed}`;
+      await storage.updateCampaign(id, {
+        backgroundImageUrl: url,
+        backgroundStyle: finalStyle,
+      });
+      res.json({ success: true, data: { backgroundImageUrl: url, backgroundStyle: finalStyle } });
+    } catch (err) {
+      console.error("background generate error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // DELETE /api/social-media/campaigns/:id/background — clear background
+  app.delete("/api/social-media/campaigns/:id/background", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+      await storage.updateCampaign(id, { backgroundImageUrl: undefined, backgroundStyle: undefined });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ─── TASK 4: Metrics endpoints ────────────────────────────────────────────
+
+  // GET /api/social-media/metrics — total & per-endpoint cost summary
+  app.get("/api/social-media/metrics", async (_req, res) => {
+    try {
+      const logs = await storage.getApiUsageLogs(1000);
+      const totalInputTokens = logs.reduce((s, l) => s + l.inputTokens, 0);
+      const totalOutputTokens = logs.reduce((s, l) => s + l.outputTokens, 0);
+      const totalCostMicros = logs.reduce((s, l) => s + l.costUsd, 0);
+
+      // Group by endpoint
+      const byEndpoint: Record<string, { calls: number; inputTokens: number; outputTokens: number; costMicros: number }> = {};
+      for (const l of logs) {
+        if (!byEndpoint[l.endpoint]) byEndpoint[l.endpoint] = { calls: 0, inputTokens: 0, outputTokens: 0, costMicros: 0 };
+        byEndpoint[l.endpoint].calls++;
+        byEndpoint[l.endpoint].inputTokens += l.inputTokens;
+        byEndpoint[l.endpoint].outputTokens += l.outputTokens;
+        byEndpoint[l.endpoint].costMicros += l.costUsd;
+      }
+
+      // Recent 20 logs
+      const recent = logs.slice(-20).reverse();
+
+      res.json({
+        success: true,
+        data: {
+          totalCalls: logs.length,
+          totalInputTokens,
+          totalOutputTokens,
+          totalCostMicros,
+          totalCostUsd: totalCostMicros / 1_000_000,
+          byEndpoint,
+          recent,
+        },
+      });
+    } catch (err) {
+      console.error("metrics error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ─── TASK 6: Published posts history ─────────────────────────────────────
+
+  // GET /api/social-media/metrics/published-posts — campaigns with published posts
+  app.get("/api/social-media/metrics/published-posts", async (_req, res) => {
+    try {
+      const campaigns = await storage.getCampaigns();
+      const result = await Promise.all(
+        campaigns.map(async (c) => {
+          const posts = await storage.getPostsByCampaignId(c.id);
+          const publishedPosts = posts.filter((p) => p.status === "published");
+          return { ...c, publishedPosts, publishedCount: publishedPosts.length };
+        })
+      );
+      // Only return campaigns with at least one published post OR stage = completed
+      const filtered = result.filter((c) => c.publishedCount > 0 || c.stage === "completed");
+      res.json({ success: true, data: filtered });
+    } catch (err) {
+      console.error("published-posts error:", err);
       res.status(500).json({ message: "Internal server error" });
     }
   });
