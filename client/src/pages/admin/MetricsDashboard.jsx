@@ -24,6 +24,8 @@ function endpointLabel(ep) {
   const map = {
     "chat": "RAG Chat",
     "draft-generation": "Draft Generation",
+    "background_generation": "Background (Gemini Imagen)",
+    "description_improvement": "Description AI Improvement",
   };
   if (ep.startsWith("post-generation:")) return `Post: ${ep.split(":")[1]}`;
   return map[ep] ?? ep;

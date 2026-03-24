@@ -24,7 +24,7 @@ import { db } from "./db";
 import { eq, sql, desc, sum } from "drizzle-orm";
 import { companyKnowledge } from "./knowledge/company";
 import { calcCostMicros } from "./utils/claudePricing";
-import { generateBackgroundSvg } from "./utils/backgroundGenerator";
+import { generateBackgroundSvg, generateBackgroundWithGemini } from "./utils/backgroundGenerator";
 import { ADMIN_WORKFLOW_KNOWLEDGE } from "./data/adminKnowledge";
 import { ytDlpPath } from "./utils/ytDlpPath";
 
@@ -1474,6 +1474,66 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
     } catch (err) {
       console.error("yt-dlp download error:", err);
       res.status(500).json({ message: "Download failed" });
+    }
+  });
+
+  // POST /api/social-media/backgrounds/generate-ai
+  app.post("/api/social-media/backgrounds/generate-ai", async (req, res) => {
+    try {
+      const { campaignId, style = "aurora", width = 1080, height = 1080 } = req.body as {
+        campaignId?: number; style?: string; width?: number; height?: number;
+      };
+      if (!campaignId) return res.status(400).json({ message: "campaignId required" });
+      const id = Number(campaignId);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid campaignId" });
+
+      const geminiKey = process.env.GEMINI_API_KEY ?? "";
+
+      if (geminiKey) {
+        const result = await generateBackgroundWithGemini({
+          style: style as "aurora" | "minimal" | "grid",
+          width: Number(width),
+          height: Number(height),
+          geminiApiKey: geminiKey,
+        });
+
+        if (result) {
+          const pathMod = await import("path");
+          const fsMod = await import("fs");
+          const dir = pathMod.resolve("./uploads/media/backgrounds");
+          fsMod.mkdirSync(dir, { recursive: true });
+          const filename = `${id}-${Date.now()}.png`;
+          const filepath = pathMod.join(dir, filename);
+          fsMod.writeFileSync(filepath, Buffer.from(result.imageBase64, "base64"));
+          const fileUrl = `/uploads/media/backgrounds/${filename}`;
+
+          await storage.updateCampaign(id, { backgroundImageUrl: fileUrl, backgroundStyle: style });
+
+          storage.createApiUsageLog({
+            provider: "google",
+            model: "gemini-imagen-3",
+            endpoint: "background_generation",
+            inputTokens: 0,
+            outputTokens: 0,
+            costUsd: Math.round(0.02 * 1_000_000),
+            campaignId: id,
+          }).catch(() => {});
+
+          return res.json({ success: true, data: { fileUrl, source: "gemini" } });
+        }
+      }
+
+      // SVG fallback
+      const svgContent = generateBackgroundSvg({
+        style: style as any,
+        seed: id,
+        width: Number(width),
+        height: Number(height),
+      });
+      return res.json({ success: true, data: { svgContent, source: "svg" } });
+    } catch (err) {
+      console.error("AI background generate error:", err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 

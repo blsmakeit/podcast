@@ -24,3 +24,11 @@ export function calcCostMicros(model: string, inputTokens: number, outputTokens:
 export function formatCost(micros: number): string {
   return `$${(micros / 1_000_000).toFixed(4)}`;
 }
+
+export const GEMINI_PRICING = {
+  "gemini-imagen-3": { costPerImage: 0.02 },
+  "gemini-2.0-flash": {
+    inputPer1kTokens: 0.000075,
+    outputPer1kTokens: 0.0003,
+  },
+};

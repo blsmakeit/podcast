@@ -152,6 +152,50 @@ function generateGrid(rand: () => number, w: number, h: number): string {
 </svg>`;
 }
 
+// ─── Gemini Imagen generation ────────────────────────────────────────────────
+
+const GEMINI_PROMPTS: Record<string, string> = {
+  aurora: "Professional podcast background, aurora borealis style with PCB circuit board traces, deep black base (#080808), flowing crimson red (#D42B2B) and white aurora light waves, tech hardware R&D aesthetic, semi-transparent circuit overlay with junction nodes, strong vignette on all edges, cinematic premium broadcast quality. No text, no people, no logos, no watermarks.",
+  minimal: "Minimalist professional dark podcast background, deep black (#080808) base, subtle crimson red (#D42B2B) circuit board traces on left edge and corners, clean geometric lines, tech aesthetic, elegant vignette. No text, no people, no logos.",
+  grid: "Professional dark tech podcast background, black base, crimson red (#D42B2B) dot grid pattern, PCB traces and junction nodes, modern hardware engineering aesthetic. No text, no people, no logos.",
+};
+
+export async function generateBackgroundWithGemini(options: {
+  style: "aurora" | "minimal" | "grid";
+  width: number;
+  height: number;
+  geminiApiKey: string;
+}): Promise<{ imageBase64: string; mimeType: string } | null> {
+  try {
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(options.geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: "imagen-3.0-generate-002" });
+
+    const prompt = GEMINI_PROMPTS[options.style] ?? GEMINI_PROMPTS.aurora;
+
+    const result = await (model as any).generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ["IMAGE"] },
+    });
+
+    const candidate = result?.response?.candidates?.[0];
+    const imagePart = candidate?.content?.parts?.find((p: any) => p.inlineData);
+
+    if (imagePart?.inlineData?.data) {
+      return {
+        imageBase64: imagePart.inlineData.data,
+        mimeType: imagePart.inlineData.mimeType ?? "image/png",
+      };
+    }
+
+    console.warn("[Gemini] No image data in response — falling back to SVG");
+    return null;
+  } catch (err) {
+    console.warn("[Gemini] Image generation failed:", (err as Error).message, "— falling back to SVG");
+    return null;
+  }
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export function generateBackgroundSvg(opts: BgOptions = {}): string {
