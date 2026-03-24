@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
@@ -9,6 +10,7 @@ import CampaignProgressBar from "@/components/admin/CampaignProgressBar";
 import PlatformExportCard from "@/components/admin/PlatformExportCard";
 import BackgroundPanel from "@/components/admin/BackgroundPanel";
 import VideoTeaserPanel from "@/components/admin/VideoTeaserPanel";
+import PostComposer from "@/components/admin/PostComposer";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -113,6 +115,17 @@ export default function CampaignPublication() {
     },
   });
 
+  const [openPreviewIds, setOpenPreviewIds] = useState(new Set());
+
+  const togglePreview = (postId) => {
+    setOpenPreviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+  };
+
   const campaign = pubData?.campaign;
   const episode = pubData?.episode;
   const selectedDraft = pubData?.selectedDraft;
@@ -181,12 +194,33 @@ export default function CampaignPublication() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {postsByPlatform[platform].map((post) => (
-                    <PlatformExportCard
-                      key={post.id}
-                      post={post}
-                      episodeTitle={episode?.title}
-                      onStatusChange={(postId, status) => updateStatus({ postId, status })}
-                    />
+                    <div key={post.id}>
+                      <PlatformExportCard
+                        post={post}
+                        episodeTitle={episode?.title}
+                        onStatusChange={(postId, status) => updateStatus({ postId, status })}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => togglePreview(post.id)}
+                        className="gap-1 text-xs mt-1"
+                      >
+                        {openPreviewIds.has(post.id) ? "Close preview ▲" : "Preview post ▼"}
+                      </Button>
+                      {openPreviewIds.has(post.id) && (
+                        <div className="mt-2 pb-4">
+                          <PostComposer
+                            backgroundUrl={campaign?.backgroundImageUrl}
+                            content={post.content}
+                            platform={post.platform}
+                            episodeTitle={episode?.title}
+                            guestName={episode?.guestName}
+                            thumbnailUrl={episode?.thumbnailUrl}
+                          />
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
