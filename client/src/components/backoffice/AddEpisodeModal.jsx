@@ -30,6 +30,8 @@ const DEFAULT_FORM = {
   videoUrl: "",
   thumbnailUrl: "",
   category: "Technology",
+  guestName: "",
+  guestRole: "",
 };
 
 export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
@@ -61,7 +63,10 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
         videoUrl: initialData.videoUrl ?? "",
         thumbnailUrl: initialData.thumbnailUrl ?? "",
         category: initialData.category ?? "Technology",
+        guestName: initialData.guestName ?? "",
+        guestRole: initialData.guestRole ?? "",
       });
+      setTranscriptText(initialData.rawTranscript ?? "");
       setTranscripts(
         initialData.transcripts?.length > 0
           ? initialData.transcripts.map((t) => ({ time: t.time ?? "", topic: t.topic ?? "", text: t.text ?? "" }))
@@ -149,6 +154,9 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
       thumbnailUrl: form.thumbnailUrl,
       category: form.category,
       transcripts: validTranscripts,
+      rawTranscript: transcriptText || null,
+      guestName: form.guestName || null,
+      guestRole: form.guestRole || null,
     };
 
     if (isEditMode) {
@@ -500,6 +508,29 @@ export function AddEpisodeModal({ open, onClose, episodeId, initialData }) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-guest-name">Guest Name <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="ep-guest-name"
+                  placeholder="e.g. João Silva"
+                  value={form.guestName}
+                  onChange={(e) => updateField("guestName", e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-guest-role">Guest Role / Title <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="ep-guest-role"
+                  placeholder="e.g. CTO at Acme Hardware"
+                  value={form.guestRole}
+                  onChange={(e) => updateField("guestRole", e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
             </div>
           </div>
 
