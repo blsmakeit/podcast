@@ -4,6 +4,9 @@ import fs from 'fs';
 
 const MEDIA_STORAGE_PATH = process.env.MEDIA_STORAGE_PATH || './uploads/media';
 const VIDEO_STORAGE_PATH = process.env.VIDEO_STORAGE_PATH || './uploads/videos';
+const ASSETS_PATH = path.resolve('./server/assets');
+
+if (!fs.existsSync(ASSETS_PATH)) fs.mkdirSync(ASSETS_PATH, { recursive: true });
 
 // Ensure directories exist
 [MEDIA_STORAGE_PATH, VIDEO_STORAGE_PATH].forEach((dir) => {
@@ -45,5 +48,19 @@ export const uploadVideo = multer({
   fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'video/mp4' || file.mimetype === 'video/quicktime') cb(null, true);
     else cb(new Error('Only MP4/MOV video files allowed'));
+  },
+});
+
+const cookiesStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, ASSETS_PATH),
+  filename: (_req, _file, cb) => cb(null, 'youtube-cookies.txt'),
+});
+
+export const uploadCookies = multer({
+  storage: cookiesStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    if (file.originalname.endsWith('.txt') || file.mimetype === 'text/plain') cb(null, true);
+    else cb(new Error('Only .txt files allowed'));
   },
 });

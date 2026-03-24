@@ -19,3 +19,6 @@ uploads/media/*
 !uploads/media/.gitkeep
 uploads/videos/*
 !uploads/videos/.gitkeep
+
+# Server assets — cookies and other secrets, never commit
+server/assets/

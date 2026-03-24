@@ -1,6 +1,6 @@
 import type { Express, Request } from "express";
 import type { Server } from "http";
-import { uploadImages, uploadVideo } from "./middleware/upload";
+import { uploadImages, uploadVideo, uploadCookies } from "./middleware/upload";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import {
@@ -1222,6 +1222,15 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
     });
   });
 
+  // POST /api/social-media/admin/upload-cookies
+  app.post("/api/social-media/admin/upload-cookies", (req, res) => {
+    uploadCookies.single("cookies")(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message });
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      res.json({ success: true, message: "Cookies uploaded" });
+    });
+  });
+
   // POST /api/social-media/campaigns/:id/teaser/upload-source
   app.post("/api/social-media/campaigns/:id/teaser/upload-source", (req, res) => {
     uploadVideo.single("video")(req, res, async (err) => {
@@ -1348,16 +1357,23 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
       const VIDEO_STORAGE_PATH = process.env.VIDEO_STORAGE_PATH || "./uploads/videos";
       const { spawn } = await import("child_process");
       const path = await import("path");
+      const fs = await import("fs");
       const outputFile = path.resolve(VIDEO_STORAGE_PATH, `${id}-source.mp4`);
 
       // FIX 4: handle python3 module fallback and missing yt-dlp
+      const cookiesPath = path.resolve('./server/assets/youtube-cookies.txt');
+      const cookiesExist = fs.existsSync(cookiesPath);
+      console.log('[yt-dlp] cookies file exists:', cookiesExist);
+
       const ytDlpArgs = [
-        "--no-playlist",
-        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "--merge-output-format", "mp4",
-        "--progress",
-        "--newline",
-        "-o", outputFile,
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '--merge-output-format', 'mp4',
+        '-o', outputFile,
+        '--no-playlist',
+        '--socket-timeout', '30',
+        '--progress',
+        '--newline',
+        ...(cookiesExist ? ['--cookies', cookiesPath] : []),
         youtubeUrl,
       ];
 
