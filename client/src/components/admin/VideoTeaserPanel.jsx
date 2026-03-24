@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Play, Download, Loader2, AlertCircle, ExternalLink, RefreshCw, Youtube } from "lucide-react";
+import { Upload, Play, Download, Loader2, AlertCircle, ExternalLink, RefreshCw, Youtube, RotateCcw } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -40,6 +40,23 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
       return false;
     },
     enabled: !isNaN(campaignId),
+  });
+
+  const { mutate: resetTeaser, isPending: isResetting } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/api/social-media/campaigns/${campaignId}/teaser/reset`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Reset failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/teaser/status`] });
+      toast({ title: "Status reset", description: "You can now upload or download a new source video." });
+    },
+    onError: () => {
+      toast({ title: "Reset failed", description: "Could not reset teaser status.", variant: "destructive" });
+    },
   });
 
   const { mutate: generateTeaser, isPending: isGenerating } = useMutation({
@@ -261,14 +278,26 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
             <div>
               <p className="font-medium">Generation failed</p>
               <p className="text-xs">{teaserStatus.error}</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => generateTeaser()}
-                className="mt-2 gap-1.5 h-7 text-xs"
-              >
-                <RefreshCw className="w-3 h-3" /> Retry
-              </Button>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => generateTeaser()}
+                  className="gap-1.5 h-7 text-xs"
+                >
+                  <RefreshCw className="w-3 h-3" /> Retry
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => resetTeaser()}
+                  disabled={isResetting}
+                  className="gap-1.5 h-7 text-xs"
+                >
+                  {isResetting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                  Reset status
+                </Button>
+              </div>
             </div>
           </div>
         )}

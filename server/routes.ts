@@ -1316,6 +1316,23 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
     }
   });
 
+  // DELETE /api/social-media/campaigns/:id/teaser/reset
+  app.delete("/api/social-media/campaigns/:id/teaser/reset", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+      await storage.updateCampaign(id, {
+        teaserJobStatus: null,
+        teaserJobError: null,
+        teaserJobProgress: 0,
+        teaserJobId: null,
+      });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ─── TASK 1: yt-dlp YouTube download ─────────────────────────────────────
   app.post("/api/social-media/campaigns/:id/teaser/download-youtube", async (req, res) => {
     try {

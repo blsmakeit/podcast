@@ -59,5 +59,33 @@ function resolve(): string {
   return "";
 }
 
-export const ytDlpPath = resolve();
+let ytDlpPath = resolve();
+
+// pip3 show fallback — derives bin path from the package install location
+if (!ytDlpPath) {
+  try {
+    const pipShow = execSync(
+      "pip3 show yt-dlp 2>/dev/null | grep Location",
+      { timeout: 5000 }
+    ).toString().trim();
+    if (pipShow) {
+      const location = pipShow.replace("Location: ", "").trim();
+      const candidate = `${location}/../../../bin/yt-dlp`;
+      const r = spawnSync(candidate, ["--version"], { timeout: 3000 });
+      if (r.status === 0) {
+        ytDlpPath = candidate;
+        console.log("[yt-dlp] found via pip3 show:", candidate);
+      }
+    }
+  } catch {}
+}
+
 console.log("[yt-dlp] final resolved path:", ytDlpPath || "NOT FOUND");
+
+// Log runtime PATH for debugging on Render
+try {
+  const env = execSync("env | grep -i path", { timeout: 3000 }).toString();
+  console.log("[startup] PATH env:", env.substring(0, 500));
+} catch {}
+
+export { ytDlpPath };
