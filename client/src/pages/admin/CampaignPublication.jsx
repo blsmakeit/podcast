@@ -8,6 +8,7 @@ import { ArrowLeft, CheckCircle2, Loader2, Download, ExternalLink } from "lucide
 import CampaignProgressBar from "@/components/admin/CampaignProgressBar";
 import PlatformExportCard from "@/components/admin/PlatformExportCard";
 import BackgroundPanel from "@/components/admin/BackgroundPanel";
+import VideoTeaserPanel from "@/components/admin/VideoTeaserPanel";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -216,44 +217,11 @@ export default function CampaignPublication() {
                   </div>
                 )}
 
-                {/* Teaser */}
-                <div className="border rounded-lg p-4 space-y-3">
-                  <p className="font-semibold text-sm">Video Teaser Clip</p>
-                  {selectedDraft?.teaserTimestampSeconds != null ? (
-                    <>
-                      <p className="text-sm text-muted-foreground">
-                        Suggested 20s clip starts at{" "}
-                        <span className="font-mono font-bold">{secondsToMmss(selectedDraft.teaserTimestampSeconds)}</span>
-                      </p>
-                      {selectedDraft.teaserReason && (
-                        <p className="text-xs text-muted-foreground italic">{selectedDraft.teaserReason}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No teaser timestamp available.</p>
-                  )}
-                  {ytTeaserLink && (
-                    <a
-                      href={ytTeaserLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" /> Open in YouTube
-                    </a>
-                  )}
-                  {campaign?.teaserLandscapeUrl && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <p className="text-xs font-semibold">Generated Teaser Clips</p>
-                      <div className="flex gap-2">
-                        <video src={campaign.teaserLandscapeUrl} controls className="rounded flex-1 max-h-28" />
-                        {campaign.teaserPortraitUrl && (
-                          <video src={campaign.teaserPortraitUrl} controls className="rounded max-w-[80px]" />
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <VideoTeaserPanel
+                  campaignId={campaignId}
+                  campaign={campaign}
+                  selectedDraft={selectedDraft}
+                />
               </div>
             </div>
 
