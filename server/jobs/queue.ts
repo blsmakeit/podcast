@@ -6,19 +6,18 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 function parseRedisUrl(url: string) {
   try {
     const parsed = new URL(url);
+    const isTls = parsed.protocol === 'rediss:';
     return {
-      host: parsed.hostname || 'localhost',
+      host: parsed.hostname,
       port: parseInt(parsed.port || '6379', 10),
       password: parsed.password || undefined,
+      username: parsed.username || 'default',
       db: parsed.pathname ? parseInt(parsed.pathname.replace('/', ''), 10) || 0 : 0,
-      // Don't retry endlessly when Redis is not available in local dev
+      tls: isTls ? {} : undefined,
       maxRetriesPerRequest: null as unknown as number,
       enableReadyCheck: false,
       lazyConnect: true,
-      retryStrategy: (times: number) => {
-        if (times > 3) return null; // Stop retrying after 3 attempts
-        return Math.min(times * 500, 2000);
-      },
+      retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 500, 2000)),
     };
   } catch {
     return {
