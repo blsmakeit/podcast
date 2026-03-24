@@ -179,7 +179,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
               <Progress value={downloadProgress} className="h-1.5" />
             </div>
           )}
-          <p className="text-xs text-muted-foreground">Requires yt-dlp installed on server. Or upload manually below.</p>
+          <p className="text-xs text-muted-foreground">Paste a YouTube URL to auto-download, or upload a file manually below.</p>
         </div>
 
         <div className="border-t" />

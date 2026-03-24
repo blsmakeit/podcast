@@ -26,6 +26,7 @@ import { companyKnowledge } from "./knowledge/company";
 import { calcCostMicros } from "./utils/claudePricing";
 import { generateBackgroundSvg } from "./utils/backgroundGenerator";
 import { ADMIN_WORKFLOW_KNOWLEDGE } from "./data/adminKnowledge";
+import { ytDlpPath } from "./utils/ytDlpPath";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -1336,7 +1337,7 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const proc = spawn("yt-dlp", [
+      const proc = spawn(ytDlpPath, [
         "--no-playlist",
         "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--merge-output-format", "mp4",
