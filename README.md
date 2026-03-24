@@ -15,7 +15,7 @@
 
 **Media Navigator** is the digital home for MAKEIT OR BREAKIT Podcasts & Videocasts — a platform built for builders, engineers, and founders. It combines **PCB (Podcast Content Browser)**, an AI-powered timestamp search across all episodes, with a full **RAG chatbot** that answers questions about episodes and the show using semantic retrieval. Episodes are enriched automatically via YouTube Auto-Extraction (Supadata + Claude Sonnet 4.6) and a **PT/EN language switch** serves both English and Portuguese audiences from a single Neon translations table.
 
-**Live:** https://media-navigator.onrender.com/
+**Live:** https://makeitorbreakit.onrender.com
 
 ---
 
