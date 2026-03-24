@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Lock, Unlock, Settings, Share2 } from "lucide-react";
+import { Menu, Lock, Unlock, Settings, Share2, BarChart2 } from "lucide-react";
 import { useBackoffice } from "@/components/backoffice/BackofficeContext";
 import { useLanguage } from "@/hooks/use-language";
 import { useQuery } from "@tanstack/react-query";
@@ -81,6 +81,13 @@ export function Layout({ children }) {
                   {unprocessedCount > 9 ? "9+" : unprocessedCount}
                 </span>
               )}
+            </Link>
+            <Link
+              href="/admin/metrics"
+              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+            >
+              <BarChart2 className="w-4 h-4" />
+              <span>Metrics</span>
             </Link>
             <button
               onClick={logout}

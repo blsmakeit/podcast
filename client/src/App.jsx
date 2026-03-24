@@ -19,6 +19,7 @@ import SocialMediaManager from "@/pages/admin/SocialMediaManager";
 import CampaignDraft from "@/pages/admin/CampaignDraft";
 import CampaignProduction from "@/pages/admin/CampaignProduction";
 import CampaignPublication from "@/pages/admin/CampaignPublication";
+import MetricsDashboard from "@/pages/admin/MetricsDashboard";
 
 function AdminRoute({ component: Component }) {
   const { isAdmin } = useBackoffice();
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/admin/social-media/campaign/:id/draft" component={() => <AdminRoute component={CampaignDraft} />} />
       <Route path="/admin/social-media/campaign/:id/production" component={() => <AdminRoute component={CampaignProduction} />} />
       <Route path="/admin/social-media/campaign/:id/publication" component={() => <AdminRoute component={CampaignPublication} />} />
+      <Route path="/admin/metrics" component={() => <AdminRoute component={MetricsDashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );
