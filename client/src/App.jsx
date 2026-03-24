@@ -1,9 +1,9 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BackofficeProvider } from "@/components/backoffice/BackofficeContext";
+import { BackofficeProvider, useBackoffice } from "@/components/backoffice/BackofficeContext";
 import { LanguageProvider } from "@/hooks/use-language";
 
 import Home from "@/pages/Home";
@@ -15,6 +15,21 @@ import Contact from "@/pages/Contact";
 import ComingSoon from "@/pages/ComingSoon";
 import NotFound from "@/pages/NotFound";
 import ChatWidget from "@/components/chat/ChatWidget";
+import SocialMediaManager from "@/pages/admin/SocialMediaManager";
+import CampaignDraft from "@/pages/admin/CampaignDraft";
+import CampaignProduction from "@/pages/admin/CampaignProduction";
+import CampaignPublication from "@/pages/admin/CampaignPublication";
+import MetricsDashboard from "@/pages/admin/MetricsDashboard";
+
+function AdminRoute({ component: Component }) {
+  const { isAdmin } = useBackoffice();
+  const [, setLocation] = useLocation();
+  if (!isAdmin) {
+    setLocation("/");
+    return null;
+  }
+  return <Component />;
+}
 
 function Router() {
   return (
@@ -30,6 +45,11 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/privacy" component={ComingSoon} />
       <Route path="/terms" component={ComingSoon} />
+      <Route path="/admin/social-media" component={() => <AdminRoute component={SocialMediaManager} />} />
+      <Route path="/admin/social-media/campaign/:id/draft" component={() => <AdminRoute component={CampaignDraft} />} />
+      <Route path="/admin/social-media/campaign/:id/production" component={() => <AdminRoute component={CampaignProduction} />} />
+      <Route path="/admin/social-media/campaign/:id/publication" component={() => <AdminRoute component={CampaignPublication} />} />
+      <Route path="/admin/metrics" component={() => <AdminRoute component={MetricsDashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );

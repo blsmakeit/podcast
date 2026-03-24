@@ -24,10 +24,11 @@ export function useChat() {
         .map(m => ({ role: m.role, content: m.content }))
         .slice(-10);
 
+      const isAdmin = sessionStorage.getItem('mk_admin') === '1';
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, isAdmin }),
       });
       if (!res.ok) throw new Error('Chat failed');
       return res.json();

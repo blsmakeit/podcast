@@ -3,9 +3,12 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Lock, Unlock, Settings } from "lucide-react";
+import { Menu, Lock, Unlock, Settings, Share2, BarChart2 } from "lucide-react";
 import { useBackoffice } from "@/components/backoffice/BackofficeContext";
 import { useLanguage } from "@/hooks/use-language";
+import { useQuery } from "@tanstack/react-query";
+
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 function LangToggle({ lang, setLang, className }) {
   return (
@@ -38,6 +41,19 @@ export function Layout({ children }) {
   const { isAdmin, openLogin, logout } = useBackoffice();
   const { lang, setLang, t } = useLanguage();
 
+  const { data: unprocessedData } = useQuery({
+    queryKey: ['/api/social-media/unprocessed-count'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/social-media/unprocessed-count`);
+      if (!res.ok) return { count: 0 };
+      const json = await res.json();
+      return json.data ?? { count: 0 };
+    },
+    enabled: isAdmin,
+    refetchInterval: 30000,
+  });
+  const unprocessedCount = unprocessedData?.count ?? 0;
+
   const navItems = [
     { label: t('nav.home'), href: "/" },
     { label: t('nav.episodes'), href: "/episodes" },
@@ -48,15 +64,38 @@ export function Layout({ children }) {
     <div className="min-h-screen flex flex-col bg-background font-body">
       {/* Admin banner */}
       {isAdmin && (
-        <div className="bg-primary text-primary-foreground py-2 px-4 text-center text-sm font-semibold flex items-center justify-center gap-3">
-          <Settings className="w-4 h-4 animate-spin-slow" />
-          <span>{t('admin.banner')}</span>
-          <button
-            onClick={logout}
-            className="underline underline-offset-2 hover:opacity-80 transition-opacity ml-2"
-          >
-            {t('admin.exit')}
-          </button>
+        <div className="bg-primary text-primary-foreground py-2 px-4 text-sm font-semibold flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Settings className="w-4 h-4 animate-spin-slow shrink-0" />
+            <span>{t('admin.banner')}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/admin/social-media"
+              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity relative"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Social Media</span>
+              {unprocessedCount > 0 && (
+                <span className="absolute -top-2 -right-3 bg-white text-primary text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                  {unprocessedCount > 9 ? "9+" : unprocessedCount}
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/admin/metrics"
+              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+            >
+              <BarChart2 className="w-4 h-4" />
+              <span>Metrics</span>
+            </Link>
+            <button
+              onClick={logout}
+              className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+            >
+              {t('admin.exit')}
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,8 +1,24 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import path from "path";
+import fs from "fs";
+import { execSync } from "child_process";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+
+// Initialise video processing worker (only when Redis is available)
+if (process.env.REDIS_URL) {
+  import("./jobs/videoProcessor").catch((e) => console.warn("[Worker] Video processor not started:", e.message));
+}
+
+// yt-dlp availability check (non-blocking, informational)
+try {
+  const ytdlpVersion = execSync("yt-dlp --version", { timeout: 5000 }).toString().trim();
+  console.log(`[yt-dlp] available: v${ytdlpVersion}`);
+} catch {
+  console.warn("[yt-dlp] not found — YouTube auto-download disabled. Install with: pip3 install yt-dlp");
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -83,6 +99,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Serve uploaded media files
+  const uploadsMediaPath = process.env.MEDIA_STORAGE_PATH || './uploads/media';
+  const uploadsVideosPath = process.env.VIDEO_STORAGE_PATH || './uploads/videos';
+  [uploadsMediaPath, uploadsVideosPath].forEach((dir) => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  });
+  app.use('/uploads/media', express.static(path.resolve(uploadsMediaPath)));
+  app.use('/uploads/videos', express.static(path.resolve(uploadsVideosPath)));
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
