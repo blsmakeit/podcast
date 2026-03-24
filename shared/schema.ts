@@ -107,6 +107,8 @@ export const mediaCampaigns = pgTable("media_campaigns", {
   teaserPortraitUrl: text("teaser_portrait_url"),
   teaserStartSeconds: integer("teaser_start_seconds"),
   teaserJobError: text("teaser_job_error"),
+  backgroundImageUrl: text("background_image_url"),
+  backgroundStyle: text("background_style").default("aurora"), // 'aurora' | 'minimal' | 'grid'
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -173,3 +175,23 @@ export type MediaPost = typeof mediaPosts.$inferSelect;
 export type InsertMediaPost = typeof mediaPosts.$inferInsert;
 export type MediaAsset = typeof mediaAssets.$inferSelect;
 export type InsertMediaAsset = typeof mediaAssets.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────
+// API Usage Logs — Claude cost tracking
+// ─────────────────────────────────────────────────────────────
+
+export const apiUsageLogs = pgTable("api_usage_logs", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull().default("anthropic"), // 'anthropic' | 'gemini' | 'voyage'
+  model: text("model").notNull(),
+  endpoint: text("endpoint").notNull(), // e.g. 'chat', 'draft-generation', 'post-generation'
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  costUsd: integer("cost_usd_micros").notNull().default(0), // stored as microdollars (1 USD = 1_000_000)
+  campaignId: integer("campaign_id"),
+  episodeId: integer("episode_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type ApiUsageLog = typeof apiUsageLogs.$inferSelect;
+export type InsertApiUsageLog = typeof apiUsageLogs.$inferInsert;

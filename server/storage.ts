@@ -5,6 +5,7 @@ import {
   draftSuggestions, type DraftSuggestion, type InsertDraftSuggestion,
   mediaPosts, type MediaPost, type InsertMediaPost,
   mediaAssets, type MediaAsset, type InsertMediaAsset,
+  apiUsageLogs, type ApiUsageLog, type InsertApiUsageLog,
 } from "@shared/schema";
 import { eq, isNull, notInArray, inArray } from "drizzle-orm";
 
@@ -184,6 +185,19 @@ export class DatabaseStorage implements IStorage {
 
   async getAssetsByCampaignId(campaignId: number): Promise<MediaAsset[]> {
     return await db.select().from(mediaAssets).where(eq(mediaAssets.campaignId, campaignId));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // API Usage Logs
+  // ─────────────────────────────────────────────────────────────
+
+  async createApiUsageLog(data: InsertApiUsageLog): Promise<ApiUsageLog> {
+    const [log] = await db.insert(apiUsageLogs).values(data).returning();
+    return log;
+  }
+
+  async getApiUsageLogs(limit = 500): Promise<ApiUsageLog[]> {
+    return await db.select().from(apiUsageLogs).orderBy(apiUsageLogs.createdAt).limit(limit);
   }
 }
 
