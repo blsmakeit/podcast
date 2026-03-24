@@ -906,7 +906,7 @@ Analyse all key moments. Return a JSON array of exactly 5 objects, ranked by soc
         rank: d.rank,
         keyMomentIndex: d.keyMomentIndex ?? null,
         timestamp: d.timestamp ?? null,
-        impactScore: d.impactScore,
+        impactScore: Math.round(Number(d.impactScore ?? 5) * 10) / 10,
         impactReason: d.impactReason ?? null,
         insight: d.insight,
         theme: d.theme,

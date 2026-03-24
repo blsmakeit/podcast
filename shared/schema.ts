@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, customType, boolean, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, jsonb, timestamp, customType, boolean, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // pgvector custom type — dimension set to 1024 (BAAI/bge-large-en-v1.5, multilingual-e5-large, voyage-large-2)
@@ -119,7 +119,7 @@ export const draftSuggestions = pgTable("draft_suggestions", {
   rank: integer("rank").notNull(),
   keyMomentIndex: integer("key_moment_index"),
   timestamp: text("timestamp"),
-  impactScore: integer("impact_score").notNull(),
+  impactScore: real("impact_score").notNull(),
   impactReason: text("impact_reason"),
   insight: text("insight").notNull(),
   theme: text("theme").notNull(),
