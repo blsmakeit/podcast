@@ -2,23 +2,15 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
-import { execSync } from "child_process";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { ytDlpPath } from "./utils/ytDlpPath";
+// Import ytDlpPath so path resolution runs at startup and logs its result
+import "./utils/ytDlpPath";
 
 // Initialise video processing worker (only when Redis is available)
 if (process.env.REDIS_URL) {
   import("./jobs/videoProcessor").catch((e) => console.warn("[Worker] Video processor not started:", e.message));
-}
-
-// yt-dlp availability check (non-blocking, informational)
-try {
-  const ytdlpVersion = execSync(`"${ytDlpPath}" --version`, { timeout: 5000 }).toString().trim();
-  console.log(`[yt-dlp] available at: ${ytDlpPath} (v${ytdlpVersion})`);
-} catch {
-  console.warn(`[yt-dlp] not found at: ${ytDlpPath} — YouTube auto-download disabled. Install with: pip3 install yt-dlp`);
 }
 
 const app = express();

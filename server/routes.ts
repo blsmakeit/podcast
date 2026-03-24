@@ -1333,11 +1333,8 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
       const path = await import("path");
       const outputFile = path.resolve(VIDEO_STORAGE_PATH, `${id}-source.mp4`);
 
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-
-      const proc = spawn(ytDlpPath, [
+      // FIX 4: handle python3 module fallback and missing yt-dlp
+      const ytDlpArgs = [
         "--no-playlist",
         "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--merge-output-format", "mp4",
@@ -1345,12 +1342,63 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
         "--newline",
         "-o", outputFile,
         youtubeUrl,
-      ]);
+      ];
+
+      let spawnCmd: string;
+      let spawnArgs: string[];
+
+      if (ytDlpPath === "__python3_module__") {
+        spawnCmd = "python3";
+        spawnArgs = ["-m", "yt_dlp", ...ytDlpArgs];
+      } else if (ytDlpPath) {
+        spawnCmd = ytDlpPath;
+        spawnArgs = ytDlpArgs;
+      } else {
+        // yt-dlp not available — fail immediately with a clear message
+        await storage.updateCampaign(id, {
+          teaserJobStatus: "failed",
+          teaserJobError: "yt-dlp is not installed on this server",
+        });
+        return res.status(503).json({
+          success: false,
+          message: "yt-dlp is not available. Please upload the MP4 manually.",
+        });
+      }
+
+      // FIX 2: mark as downloading BEFORE spawning so status is always set
+      await storage.updateCampaign(id, {
+        teaserJobStatus: "downloading",
+        teaserJobProgress: 0,
+        teaserJobError: undefined,
+      });
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      // FIX 1: defensive logging
+      console.log("[yt-dlp] spawning with path:", spawnCmd);
+      console.log("[yt-dlp] args:", spawnArgs);
+      console.log("[yt-dlp] output file:", outputFile);
+
+      const proc = spawn(spawnCmd, spawnArgs);
+
+      // FIX 1: log spawn errors
+      proc.on("error", (err: Error) => {
+        console.error("[yt-dlp] spawn error:", err.message);
+        storage.updateCampaign(id, {
+          teaserJobStatus: "failed",
+          teaserJobError: `yt-dlp spawn failed: ${err.message}`,
+        }).catch(() => {});
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.end();
+      });
 
       let lastProgress = 0;
 
       proc.stdout.on("data", (chunk: Buffer) => {
         const line = chunk.toString();
+        console.log("[yt-dlp] stdout:", line.trimEnd());
         const match = line.match(/(\d+(?:\.\d+)?)%/);
         if (match) {
           const pct = Math.floor(Number(match[1]));
@@ -1363,6 +1411,7 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
 
       proc.stderr.on("data", (chunk: Buffer) => {
         const line = chunk.toString();
+        console.log("[yt-dlp] stderr:", line.trimEnd());
         const match = line.match(/(\d+(?:\.\d+)?)%/);
         if (match) {
           const pct = Math.floor(Number(match[1]));
@@ -1374,18 +1423,18 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
       });
 
       proc.on("close", async (code: number) => {
+        console.log("[yt-dlp] process closed with code:", code);
         if (code === 0) {
           const sourceVideoUrl = `/uploads/videos/${id}-source.mp4`;
-          await storage.updateCampaign(id, { sourceVideoUrl });
+          await storage.updateCampaign(id, { sourceVideoUrl, teaserJobStatus: "idle" });
           res.write(`data: ${JSON.stringify({ done: true, sourceVideoUrl })}\n\n`);
         } else {
+          await storage.updateCampaign(id, {
+            teaserJobStatus: "failed",
+            teaserJobError: `yt-dlp exited with code ${code}`,
+          });
           res.write(`data: ${JSON.stringify({ error: "yt-dlp exited with code " + code })}\n\n`);
         }
-        res.end();
-      });
-
-      proc.on("error", (err: Error) => {
-        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
         res.end();
       });
     } catch (err) {

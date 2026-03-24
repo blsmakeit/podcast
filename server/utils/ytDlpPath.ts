@@ -1,21 +1,34 @@
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 
-// Resolve the full path to yt-dlp at module load time.
-// pip3 installs to ~/.local/bin which is often not in Node's runtime PATH on Render.
-function resolveYtDlpPath(): string {
-  const candidates = [
-    "which yt-dlp",
-    "python3 -m site --user-base 2>/dev/null | xargs -I{} echo {}/bin/yt-dlp | head -1",
-  ];
+// Try known install locations in order. pip3 --user installs to ~/.local/bin,
+// which is not in Node's runtime PATH on Render.
+const candidatePaths = [
+  "/usr/local/bin/yt-dlp",
+  "/usr/bin/yt-dlp",
+  `${process.env.HOME ?? "/root"}/.local/bin/yt-dlp`,
+  "/opt/render/project/src/.venv/bin/yt-dlp",
+  "/opt/render/project/.venv/bin/yt-dlp",
+  "yt-dlp", // fallback — let the OS resolve via PATH
+];
 
-  for (const cmd of candidates) {
-    try {
-      const result = execSync(cmd, { timeout: 5000 }).toString().trim().split("\n")[0];
-      if (result) return result;
-    } catch {}
+function resolve(): string {
+  for (const candidate of candidatePaths) {
+    const result = spawnSync(candidate, ["--version"], { timeout: 5000 });
+    if (result.status === 0) {
+      console.log(`[yt-dlp] found at: ${candidate} — version: ${result.stdout.toString().trim()}`);
+      return candidate;
+    }
   }
 
-  return "yt-dlp"; // fallback — let the OS resolve it at spawn time
+  // Last resort: python3 -m yt_dlp
+  const pyResult = spawnSync("python3", ["-m", "yt_dlp", "--version"], { timeout: 5000 });
+  if (pyResult.status === 0) {
+    console.log("[yt-dlp] available via python3 -m yt_dlp");
+    return "__python3_module__";
+  }
+
+  console.warn("[yt-dlp] NOT FOUND — YouTube auto-download will fail");
+  return "";
 }
 
-export const ytDlpPath = resolveYtDlpPath();
+export const ytDlpPath = resolve();
