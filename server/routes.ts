@@ -1303,8 +1303,11 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
         const id = Number(req.params.id);
         if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
         const file = (req as any).file as Express.Multer.File | undefined;
+        console.log('[upload-source] campaignId:', id);
+        console.log('[upload-source] req.file:', file);
         if (!file) return res.status(400).json({ message: "No video file uploaded" });
         const sourceVideoUrl = `/uploads/videos/${file.filename}`;
+        console.log('[upload-source] saving sourceVideoUrl:', sourceVideoUrl);
         await storage.updateCampaign(id, { sourceVideoUrl });
         res.json({ success: true, data: { sourceVideoUrl, fileName: file.filename } });
       } catch (error) {

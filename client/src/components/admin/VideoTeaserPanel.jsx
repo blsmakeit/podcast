@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Play, Download, Loader2, AlertCircle, ExternalLink, RefreshCw, Youtube, RotateCcw } from "lucide-react";
+import { Upload, Play, Download, Loader2, AlertCircle, ExternalLink, RefreshCw, Youtube, RotateCcw, CheckCircle2, KeyRound } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -27,6 +28,8 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const [ytUrl, setYtUrl] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [cookiesUploaded, setCookiesUploaded] = useState(false);
+  const [isUploadingCookies, setIsUploadingCookies] = useState(false);
 
   const { data: teaserStatus, isLoading: loadingStatus } = useQuery({
     queryKey: [`/api/social-media/campaigns/${campaignId}/teaser/status`],
@@ -90,6 +93,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const handleCookiesUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setIsUploadingCookies(true);
     const formData = new FormData();
     formData.append("cookies", file);
     try {
@@ -98,11 +102,12 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
         body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");
-      toast({ title: "Cookies uploaded", description: "Click Download to retry the YouTube download." });
-      await handleReset();
+      setCookiesUploaded(true);
+      toast({ title: "Cookies uploaded", description: "YouTube authentication is now active." });
     } catch (err) {
       toast({ title: "Cookies upload failed", description: err.message, variant: "destructive" });
     } finally {
+      setIsUploadingCookies(false);
       if (cookiesInputRef.current) cookiesInputRef.current.value = "";
     }
   };
@@ -127,6 +132,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
       }
       setUploadProgress(100);
       qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
+      qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/publication`] });
       toast({ title: "Video uploaded", description: "Source video is ready. Configure the clip and generate." });
     } catch (err) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -167,6 +173,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
             if (evt.done) {
               setDownloadProgress(100);
               qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
+              qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/publication`] });
               toast({ title: "YouTube video downloaded", description: "Source video is ready." });
             }
             if (evt.error) throw new Error(evt.error);
@@ -223,6 +230,50 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
             </div>
           )}
           <p className="text-xs text-muted-foreground">Paste a YouTube URL to auto-download, or upload a file manually below.</p>
+        </div>
+
+        <div className="border-t" />
+
+        {/* YouTube Authentication (persistent cookies) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5" /> YouTube Authentication
+            </p>
+            {cookiesUploaded && (
+              <Badge className="bg-green-600 text-white text-xs gap-1 flex items-center">
+                <CheckCircle2 className="w-3 h-3" /> Cookies active
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept=".txt"
+              onChange={handleCookiesUpload}
+              className="hidden"
+              ref={cookiesInputRef}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => cookiesInputRef.current?.click()}
+              disabled={isUploadingCookies}
+              className="gap-1.5 h-7 text-xs"
+            >
+              {isUploadingCookies ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+              {cookiesUploaded ? "Replace cookies.txt" : "Upload cookies.txt"}
+            </Button>
+            <a
+              href="https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-primary hover:underline flex items-center gap-1"
+            >
+              <ExternalLink className="w-3 h-3" /> How to export cookies?
+            </a>
+          </div>
+          <p className="text-xs text-muted-foreground">Upload your browser's YouTube cookies to bypass bot detection on auto-download.</p>
         </div>
 
         <div className="border-t" />
@@ -328,34 +379,13 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
               </div>
             </div>
 
-            {/* Bot / auth error — offer cookies upload */}
+            {/* Bot / auth error */}
             {(teaserStatus?.error?.includes("bot") || teaserStatus?.error?.includes("Sign in")) && (
-              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-2">
+              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-1.5">
                 <p className="text-xs font-semibold text-amber-800">YouTube requires authentication</p>
                 <p className="text-xs text-amber-700">
-                  Export your YouTube cookies and upload them to enable auto-download.
-                  Or upload your MP4 manually below.
+                  Upload your YouTube cookies using the <span className="font-medium">YouTube Authentication</span> section above, then retry the download. Or upload your MP4 manually.
                 </p>
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    accept=".txt"
-                    onChange={handleCookiesUpload}
-                    className="hidden"
-                    ref={cookiesInputRef}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => cookiesInputRef.current?.click()}
-                  >
-                    Upload cookies.txt
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleReset} disabled={isResetting}>
-                    {isResetting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                    Reset &amp; retry
-                  </Button>
-                </div>
               </div>
             )}
           </div>
