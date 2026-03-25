@@ -30,6 +30,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [cookiesUploaded, setCookiesUploaded] = useState(false);
   const [isUploadingCookies, setIsUploadingCookies] = useState(false);
+  const [showReupload, setShowReupload] = useState(false);
 
   const { data: teaserStatus, isLoading: loadingStatus } = useQuery({
     queryKey: [`/api/social-media/campaigns/${campaignId}/teaser/status`],
@@ -139,6 +140,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
         toast({ title: "Video uploaded", description: "Ready to generate teaser clips." });
         qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
         qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/publication`] });
+        qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/teaser/status`] });
       } else {
         const json = JSON.parse(xhr.responseText);
         console.error("[upload] error:", json);
@@ -205,7 +207,9 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const isProcessing = teaserStatus?.status === "queued" || teaserStatus?.status === "processing";
   const isDone = teaserStatus?.status === "completed" && teaserStatus?.landscapeUrl;
   const hasFailed = teaserStatus?.status === "failed";
-  const hasSourceVideo = !!campaign?.sourceVideoUrl;
+  const hasSourceVideo = !!(campaign?.sourceVideoUrl) ||
+    teaserStatus?.status === "ready" ||
+    teaserStatus?.status === "completed";
 
   return (
     <Card>
@@ -294,27 +298,39 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
         <div className="border-t" />
 
         {/* Upload area */}
-        <div
-          className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/mp4,video/quicktime"
-            className="hidden"
-            onChange={handleFileUpload}
-          />
-          <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          {hasSourceVideo ? (
-            <p className="text-sm font-medium text-green-600">Source video uploaded. Click to replace.</p>
-          ) : (
-            <>
-              <p className="text-sm font-medium">Drop MP4/MOV here or click to upload</p>
-              <p className="text-xs text-muted-foreground mt-1">Max 4GB</p>
-            </>
-          )}
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4,video/quicktime"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+        {campaign?.sourceVideoUrl && !showReupload ? (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200">
+            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-green-800">Source video ready</p>
+              <p className="text-xs text-green-700 truncate">
+                {campaign.sourceVideoUrl.split("/").pop()}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowReupload(true)}
+              className="text-xs text-muted-foreground underline hover:text-foreground flex-shrink-0"
+            >
+              Replace
+            </button>
+          </div>
+        ) : (
+          <div
+            className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm font-medium">Drop MP4/MOV here or click to upload</p>
+            <p className="text-xs text-muted-foreground mt-1">Max 4GB</p>
+          </div>
+        )}
         {isUploading && (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">

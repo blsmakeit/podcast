@@ -4,6 +4,8 @@
  * produces the same background.
  */
 
+import { GoogleGenAI } from "@google/genai";
+
 type Style = "aurora" | "minimal" | "grid";
 
 interface BgOptions {
@@ -152,13 +154,7 @@ function generateGrid(rand: () => number, w: number, h: number): string {
 </svg>`;
 }
 
-// ─── Gemini Imagen generation ────────────────────────────────────────────────
-
-const GEMINI_PROMPTS: Record<string, string> = {
-  aurora: "Professional podcast background, aurora borealis style with PCB circuit board traces, deep black base (#080808), flowing crimson red (#D42B2B) and white aurora light waves, tech hardware R&D aesthetic, semi-transparent circuit overlay with junction nodes, strong vignette on all edges, cinematic premium broadcast quality. No text, no people, no logos, no watermarks.",
-  minimal: "Minimalist professional dark podcast background, deep black (#080808) base, subtle crimson red (#D42B2B) circuit board traces on left edge and corners, clean geometric lines, tech aesthetic, elegant vignette. No text, no people, no logos.",
-  grid: "Professional dark tech podcast background, black base, crimson red (#D42B2B) dot grid pattern, PCB traces and junction nodes, modern hardware engineering aesthetic. No text, no people, no logos.",
-};
+// ─── Gemini image generation ─────────────────────────────────────────────────
 
 export async function generateBackgroundWithGemini(options: {
   style: "aurora" | "minimal" | "grid";
@@ -167,36 +163,45 @@ export async function generateBackgroundWithGemini(options: {
   geminiApiKey: string;
 }): Promise<{ imageBase64: string; mimeType: string } | null> {
   try {
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(options.geminiApiKey);
-    const model = genAI.getGenerativeModel({
+    const prompts: Record<string, string> = {
+      aurora: `Professional podcast social media background image. Aurora borealis style with PCB circuit board traces. Deep black background. Flowing crimson red and white aurora light waves. Tech hardware R&D aesthetic. Semi-transparent circuit overlay with junction nodes. Strong dark vignette on all edges. Cinematic premium broadcast quality. No text, no people, no logos, no watermarks, no letters.`,
+      minimal: `Minimalist professional dark podcast background. Deep black base. Subtle crimson red circuit board traces on edges and corners. Clean geometric tech lines. Elegant dark vignette. No text, no people, no logos, no letters.`,
+      grid: `Professional dark tech podcast background. Pure black base. Crimson red dot grid pattern with PCB traces and junction nodes. Modern hardware engineering aesthetic. No text, no people, no logos, no letters.`,
+    };
+
+    const prompt = prompts[options.style] ?? prompts.aurora;
+    const aspectRatio = options.width === options.height ? "1:1" : "16:9";
+
+    const client = new GoogleGenAI({ apiKey: options.geminiApiKey });
+
+    const response = await client.models.generateContent({
       model: "gemini-2.0-flash-preview-image-generation",
-    });
-
-    const prompt = GEMINI_PROMPTS[options.style] ?? GEMINI_PROMPTS.aurora;
-
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
+      contents: prompt,
+      config: {
         responseModalities: ["IMAGE"],
+        imageConfig: {
+          aspectRatio,
+        },
       } as any,
     });
 
-    const imagePart = result.response.candidates?.[0]?.content?.parts?.find(
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find(
       (p: any) => p.inlineData?.mimeType?.startsWith("image/")
     );
 
-    if (!imagePart?.inlineData) {
-      console.warn("[Gemini] No image in response — falling back to SVG");
+    if (!imagePart?.inlineData?.data) {
+      console.warn("[Gemini] No image data found in response");
       return null;
     }
 
+    console.log("[Gemini] Image generated successfully — gemini-2.0-flash-preview-image-generation");
     return {
       imageBase64: imagePart.inlineData.data,
       mimeType: imagePart.inlineData.mimeType,
     };
-  } catch (err) {
-    console.warn("[Gemini] Image generation failed:", (err as Error).message, "— falling back to SVG");
+  } catch (err: any) {
+    console.error("[Gemini] Image generation failed:", err.message, "— falling back to SVG");
     return null;
   }
 }

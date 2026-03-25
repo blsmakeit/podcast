@@ -1303,13 +1303,20 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
         const id = Number(req.params.id);
         if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
         const file = (req as any).file as Express.Multer.File | undefined;
-        console.log('[upload-source] campaignId:', id);
         console.log('[upload-source] req.file:', file);
-        if (!file) return res.status(400).json({ message: "No video file uploaded" });
+        console.log('[upload-source] campaignId:', req.params.id);
+        if (!file) return res.status(400).json({ success: false, message: "No file received" });
         const sourceVideoUrl = `/uploads/videos/${file.filename}`;
         console.log('[upload-source] saving sourceVideoUrl:', sourceVideoUrl);
-        await storage.updateCampaign(id, { sourceVideoUrl });
-        res.json({ success: true, data: { sourceVideoUrl, fileName: file.filename } });
+        await storage.updateCampaign(id, {
+          sourceVideoUrl,
+          teaserJobStatus: "ready",
+          teaserJobError: null,
+        });
+        return res.json({
+          success: true,
+          data: { sourceVideoUrl, message: "Video uploaded successfully" },
+        });
       } catch (error) {
         res.status(500).json({ message: "Upload failed" });
       }
