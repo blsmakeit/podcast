@@ -174,15 +174,22 @@ export async function generateBackgroundWithGemini(options: {
 
     const client = new GoogleGenAI({ apiKey: options.geminiApiKey });
 
+    console.log("[Gemini] Starting image generation, style:", options.style);
+    console.log("[Gemini] API key present:", !!options.geminiApiKey);
+    console.log("[Gemini] API key length:", options.geminiApiKey?.length);
+
     const response = await client.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-2.0-flash-exp",
       contents: prompt,
       config: {
-        responseModalities: ["IMAGE"],
-        imageConfig: {
-          aspectRatio,
-        },
+        responseModalities: ["TEXT", "IMAGE"],
       } as any,
+    });
+
+    console.log("[Gemini] Response candidates count:", response.candidates?.length);
+    console.log("[Gemini] Parts in first candidate:", response.candidates?.[0]?.content?.parts?.length);
+    response.candidates?.[0]?.content?.parts?.forEach((p: any, i: number) => {
+      console.log(`[Gemini] Part ${i}: type=${p.text ? "text" : p.inlineData ? "image" : "unknown"}, mimeType=${p.inlineData?.mimeType}`);
     });
 
     const parts = response.candidates?.[0]?.content?.parts ?? [];
@@ -195,7 +202,7 @@ export async function generateBackgroundWithGemini(options: {
       return null;
     }
 
-    console.log("[Gemini] Image generated successfully — gemini-3.1-flash-image-preview");
+    console.log("[Gemini] Image generated successfully — gemini-2.0-flash-exp");
     return {
       imageBase64: imagePart.inlineData.data,
       mimeType: imagePart.inlineData.mimeType,
