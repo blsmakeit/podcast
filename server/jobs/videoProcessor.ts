@@ -31,6 +31,8 @@ function runFfmpeg(cmd: ffmpeg.FfmpegCommand): Promise<void> {
 export const videoWorker = new Worker('video-processing', async (job: any) => {
   const { campaignId, sourceVideoPath, startSeconds, duration, episodeTitle, guestName, guestRole } = job.data as VideoJob;
 
+  console.log('[VideoWorker] Job received:', { campaignId, sourceVideoPath, startSeconds, duration });
+
   const outputDir = path.resolve(VIDEO_STORAGE_PATH);
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -49,11 +51,14 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
 
     // ── Step 1: Detect source video dimensions ────────────────────────────
     await job.updateProgress(8);
+    console.log('[VideoWorker] Step 1: checking source file exists:', sourceVideoPath);
+    console.log('[VideoWorker] Source file exists:', fs.existsSync(sourceVideoPath));
     const vWidth  = 1920;
     const vHeight = 1080;
 
     // ── Step 2: Trim 20-second raw clip ──────────────────────────────────
     await job.updateProgress(10);
+    console.log('[VideoWorker] Step 2: trimming raw clip...');
     await runFfmpeg(
       ffmpeg(sourceVideoPath)
         .seekInput(startSeconds)
@@ -63,10 +68,12 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         .outputOptions(['-pix_fmt', 'yuv420p'])
         .output(rawClip)
     );
+    console.log('[VideoWorker] Step 2 complete: raw clip trimmed');
 
     // ── Step 3: Create 2s branded intro card ────────────────────────────
     await job.updateProgress(25);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 25 });
+    console.log('[VideoWorker] Step 3: generating intro...');
 
     const titleSafe = episodeTitle.substring(0, 45).replace(/'/g, "\\'").replace(/:/g, '\\:');
     const guestSafe = `${guestName || ''}${guestRole ? ' | ' + guestRole : ''}`.substring(0, 55).replace(/'/g, "\\'").replace(/:/g, '\\:');
@@ -98,10 +105,12 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         ])
         .output(introClip)
     );
+    console.log('[VideoWorker] Step 3 complete: intro generated');
 
     // ── Step 4: Create 3s branded outro card ────────────────────────────
     await job.updateProgress(40);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 40 });
+    console.log('[VideoWorker] Step 4: generating outro...');
 
     await runFfmpeg(
       ffmpeg()
@@ -128,10 +137,12 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         ])
         .output(outroClip)
     );
+    console.log('[VideoWorker] Step 4 complete: outro generated');
 
     // ── Step 5: Concatenate intro + raw clip + outro ─────────────────────
     await job.updateProgress(55);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 55 });
+    console.log('[VideoWorker] Step 5: concatenating clips...');
 
     fs.writeFileSync(
       concatList,
@@ -145,10 +156,12 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         .outputOptions(['-c', 'copy'])
         .output(contentClip)
     );
+    console.log('[VideoWorker] Step 5 complete: clips concatenated');
 
     // ── Step 6: Add lower-third brand overlay → landscape ───────────────
     await job.updateProgress(70);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 70 });
+    console.log('[VideoWorker] Step 6: adding lower-third overlay (landscape)...');
 
     const titleLower = episodeTitle.substring(0, 50).replace(/'/g, "\\'").replace(/:/g, '\\:');
     const guestLower = `${guestName || ''}${guestRole ? ' | ' + guestRole : ''}`.substring(0, 60).replace(/'/g, "\\'").replace(/:/g, '\\:');
@@ -164,10 +177,12 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         ])
         .output(landscapeOutput)
     );
+    console.log('[VideoWorker] Step 6 complete: landscape output ready');
 
     // ── Step 7: Create portrait 9:16 version ────────────────────────────
     await job.updateProgress(85);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 85 });
+    console.log('[VideoWorker] Step 7: creating portrait 9:16 version...');
 
     await runFfmpeg(
       ffmpeg(landscapeOutput)
@@ -180,8 +195,10 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         .addOption('-map', '0:a')
         .output(portraitOutput)
     );
+    console.log('[VideoWorker] Step 7 complete: portrait output ready');
 
     // Clean up temp files
+    console.log('[VideoWorker] Cleaning up temp files...');
     tempFiles.forEach((f) => { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {} });
 
     await job.updateProgress(100);
@@ -198,6 +215,13 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
 
     return { landscapeUrl, portraitUrl };
   } catch (error: any) {
+    console.error('[VideoWorker] Job failed:', {
+      campaignId,
+      error: error?.message,
+      stack: error?.stack,
+      code: error?.code,
+    });
+
     // Clean up all files on error
     [...tempFiles, landscapeOutput, portraitOutput].forEach((f) => {
       try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
