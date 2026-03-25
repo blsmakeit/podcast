@@ -43,14 +43,16 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
   fs.mkdirSync(outputDir, { recursive: true });
 
   const rawClip         = path.join(outputDir, `${campaignId}-raw.mp4`);
+  const fullAudio       = path.join(outputDir, `${campaignId}-full-audio.aac`);
   const introClip       = path.join(outputDir, `${campaignId}-intro.mp4`);
   const outroClip       = path.join(outputDir, `${campaignId}-outro.mp4`);
   const concatList      = path.join(outputDir, `${campaignId}-concat.txt`);
+  const videoOnlyConcat = path.join(outputDir, `${campaignId}-video-only.mp4`);
   const contentClip     = path.join(outputDir, `${campaignId}-content.mp4`);
   const landscapeOutput = path.join(outputDir, `${campaignId}-landscape.mp4`);
   const portraitOutput  = path.join(outputDir, `${campaignId}-portrait.mp4`);
 
-  const tempFiles = [rawClip, introClip, outroClip, concatList, contentClip];
+  const tempFiles = [rawClip, fullAudio, introClip, outroClip, concatList, videoOnlyConcat, contentClip];
 
   try {
     await storage.updateCampaign(campaignId, { teaserJobStatus: 'processing', teaserJobProgress: 5 });
@@ -60,15 +62,16 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
     console.log('[VideoWorker] Step 1: checking source file exists:', sourceVideoPath);
     console.log('[VideoWorker] Source file exists:', fs.existsSync(sourceVideoPath));
 
-    // ── Step 2: Trim raw clip ─────────────────────────────────────────────
+    // ── Step 2: Trim raw clip (exact duration via inputOptions) ──────────
     await job.updateProgress(10);
-    console.log('[VideoWorker] Step 2: trimming raw clip...');
+    console.log('[VideoWorker] Step 2: trimming', duration, 'seconds from', startSeconds);
     await runFfmpeg(
-      ffmpeg()
-        .input(sourceVideoPath)
-        .inputOptions(['-ss', String(startSeconds)])
-        .outputOptions([
+      ffmpeg(sourceVideoPath)
+        .inputOptions([
+          '-ss', String(startSeconds),
           '-t', String(duration),
+        ])
+        .outputOptions([
           '-c:v', 'libx264',
           '-c:a', 'aac',
           '-pix_fmt', 'yuv420p',
@@ -77,7 +80,26 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
     );
     console.log('[VideoWorker] Step 2 complete: raw clip trimmed');
 
-    // ── Step 3: Create 2s branded intro card ────────────────────────────
+    // ── Step 2b: Extract 25s continuous audio track with fade in/out ─────
+    await job.updateProgress(18);
+    const audioStart = Math.max(0, startSeconds - 2);
+    console.log('[VideoWorker] Step 2b: extracting 25s audio track from', audioStart);
+    await runFfmpeg(
+      ffmpeg()
+        .input(sourceVideoPath)
+        .inputOptions(['-ss', String(audioStart)])
+        .outputOptions([
+          '-t', '25',
+          '-vn',
+          '-af', 'afade=t=in:st=0:d=2,afade=t=out:st=22:d=3',
+          '-c:a', 'aac',
+          '-ar', '44100',
+        ])
+        .output(fullAudio)
+    );
+    console.log('[VideoWorker] Step 2b complete: full audio extracted');
+
+    // ── Step 3: Create 2s branded intro card (video-only, no audio) ──────
     await job.updateProgress(25);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 25 });
     console.log('[VideoWorker] Step 3: generating intro...');
@@ -89,8 +111,6 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
       ffmpeg()
         .input('color=c=black:s=1920x1080:r=25:d=2')
         .inputFormat('lavfi')
-        .input('anullsrc=channel_layout=stereo:sample_rate=44100')
-        .inputFormat('lavfi')
         .complexFilter([
           `[0:v]drawbox=x=0:y=0:w=1920:h=6:color=#D42B2B@1:t=fill[v1]`,
           `[v1]drawtext=fontfile=${FONT_PATH}:text='MAKEITorBREAKIT':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h*0.35[v2]`,
@@ -100,18 +120,16 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         ])
         .outputOptions([
           '-map', '[vout]',
-          '-map', '1:a',
           '-t', '2',
           '-c:v', 'libx264',
-          '-c:a', 'aac',
           '-pix_fmt', 'yuv420p',
-          '-shortest',
+          '-an',
         ])
         .output(introClip)
     );
     console.log('[VideoWorker] Step 3 complete: intro generated');
 
-    // ── Step 4: Create 3s branded outro card ────────────────────────────
+    // ── Step 4: Create 3s branded outro card (video-only, no audio) ──────
     await job.updateProgress(40);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 40 });
     console.log('[VideoWorker] Step 4: generating outro...');
@@ -119,8 +137,6 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
     await runFfmpeg(
       ffmpeg()
         .input('color=c=black:s=1920x1080:r=25:d=3')
-        .inputFormat('lavfi')
-        .input('anullsrc=channel_layout=stereo:sample_rate=44100')
         .inputFormat('lavfi')
         .complexFilter([
           `[0:v]drawbox=x=0:y=1074:w=1920:h=6:color=#D42B2B@1:t=fill[v1]`,
@@ -130,21 +146,19 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         ])
         .outputOptions([
           '-map', '[vout]',
-          '-map', '1:a',
           '-t', '3',
           '-c:v', 'libx264',
-          '-c:a', 'aac',
           '-pix_fmt', 'yuv420p',
-          '-shortest',
+          '-an',
         ])
         .output(outroClip)
     );
     console.log('[VideoWorker] Step 4 complete: outro generated');
 
-    // ── Step 5: Concatenate intro + raw clip + outro ─────────────────────
+    // ── Step 5: Concat video-only clips, then mux with fullAudio ─────────
     await job.updateProgress(55);
     await storage.updateCampaign(campaignId, { teaserJobProgress: 55 });
-    console.log('[VideoWorker] Step 5: concatenating clips...');
+    console.log('[VideoWorker] Step 5: concatenating video clips...');
 
     fs.writeFileSync(
       concatList,
@@ -157,12 +171,27 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
         .inputOptions(['-f', 'concat', '-safe', '0'])
         .outputOptions([
           '-c:v', 'libx264',
-          '-c:a', 'aac',
+          '-an',
           '-pix_fmt', 'yuv420p',
+        ])
+        .output(videoOnlyConcat)
+    );
+    console.log('[VideoWorker] Step 5a complete: video-only concat done');
+
+    await runFfmpeg(
+      ffmpeg()
+        .input(videoOnlyConcat)
+        .input(fullAudio)
+        .outputOptions([
+          '-map', '0:v',
+          '-map', '1:a',
+          '-c:v', 'copy',
+          '-c:a', 'aac',
+          '-shortest',
         ])
         .output(contentClip)
     );
-    console.log('[VideoWorker] Step 5 complete: clips concatenated');
+    console.log('[VideoWorker] Step 5b complete: audio muxed into content clip');
 
     // ── Step 6: Add lower-third brand overlay → landscape ───────────────
     await job.updateProgress(70);
