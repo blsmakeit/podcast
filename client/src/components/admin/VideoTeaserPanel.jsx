@@ -112,7 +112,7 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
     }
   };
 
-  const handleFileUpload = async (e) => {
+  const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
@@ -121,25 +121,40 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
     const formData = new FormData();
     formData.append("video", file);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/social-media/campaigns/${campaignId}/teaser/upload-source`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Upload failed" }));
-        throw new Error(err.message);
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener("progress", (ev) => {
+      if (ev.lengthComputable) {
+        const pct = Math.round((ev.loaded / ev.total) * 100);
+        setUploadProgress(pct);
       }
-      setUploadProgress(100);
-      qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
-      qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/publication`] });
-      toast({ title: "Video uploaded", description: "Source video is ready. Configure the clip and generate." });
-    } catch (err) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-    } finally {
+    });
+
+    xhr.addEventListener("load", () => {
       setIsUploading(false);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const json = JSON.parse(xhr.responseText);
+        console.log("[upload] success:", json);
+        setUploadProgress(100);
+        toast({ title: "Video uploaded", description: "Ready to generate teaser clips." });
+        qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}`] });
+        qc.invalidateQueries({ queryKey: [`/api/social-media/campaigns/${campaignId}/publication`] });
+      } else {
+        const json = JSON.parse(xhr.responseText);
+        console.error("[upload] error:", json);
+        toast({ title: "Upload failed", description: json.message || "Server error", variant: "destructive" });
+      }
       if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    });
+
+    xhr.addEventListener("error", () => {
+      setIsUploading(false);
+      toast({ title: "Upload failed", description: "Network error", variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    });
+
+    xhr.open("POST", `${API_BASE}/api/social-media/campaigns/${campaignId}/teaser/upload-source`);
+    xhr.send(formData);
   };
 
   const handleYoutubeDownload = async () => {
@@ -299,8 +314,21 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
               <p className="text-xs text-muted-foreground mt-1">Max 4GB</p>
             </>
           )}
-          {isUploading && <Progress value={uploadProgress} className="mt-3 h-1.5" />}
         </div>
+        {isUploading && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Uploading video…</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Timestamp config */}
         {hasSourceVideo && (
@@ -379,8 +407,18 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
               </div>
             </div>
 
+            {/* Rate limit / blocked */}
+            {(teaserStatus?.error?.includes("rate limit") || teaserStatus?.error?.includes("blocked") || teaserStatus?.error?.includes("manually")) && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-1">
+                <p className="text-xs font-semibold text-amber-800">Auto-download unavailable</p>
+                <p className="text-xs text-amber-700">
+                  YouTube is blocking server downloads. Use the manual MP4 upload below.
+                </p>
+              </div>
+            )}
+
             {/* Bot / auth error */}
-            {(teaserStatus?.error?.includes("bot") || teaserStatus?.error?.includes("Sign in")) && (
+            {(teaserStatus?.error?.includes("bot") || teaserStatus?.error?.includes("cookies")) && (
               <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 space-y-1.5">
                 <p className="text-xs font-semibold text-amber-800">YouTube requires authentication</p>
                 <p className="text-xs text-amber-700">

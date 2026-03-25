@@ -1481,6 +1481,7 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
       console.log("[yt-dlp] output file:", outputFile);
 
       const proc = spawn(spawnCmd, spawnArgs);
+      let stderrAccum = "";
 
       // FIX 1: log spawn errors
       proc.on("error", (err: Error) => {
@@ -1510,6 +1511,7 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
 
       proc.stderr.on("data", (chunk: Buffer) => {
         const line = chunk.toString();
+        stderrAccum += line;
         console.log("[yt-dlp] stderr:", line.trimEnd());
         const match = line.match(/(\d+(?:\.\d+)?)%/);
         if (match) {
@@ -1528,11 +1530,21 @@ Return JSON: {"instagram": {"content": "...", "charCount": N}, "linkedin": {"con
           await storage.updateCampaign(id, { sourceVideoUrl, teaserJobStatus: "idle" });
           res.write(`data: ${JSON.stringify({ done: true, sourceVideoUrl })}\n\n`);
         } else {
+          let teaserJobError: string;
+          if (stderrAccum.includes("429") || stderrAccum.includes("Too Many Requests")) {
+            teaserJobError = "YouTube is rate limiting this server. Please upload the MP4 manually.";
+          } else if (stderrAccum.includes("Only images are available")) {
+            teaserJobError = "YouTube blocked video download from this server. Please upload the MP4 manually.";
+          } else if (stderrAccum.includes("Sign in") || stderrAccum.includes("bot")) {
+            teaserJobError = "YouTube bot detection triggered. Upload fresh cookies or use manual MP4 upload.";
+          } else {
+            teaserJobError = "YouTube download failed. Please upload the MP4 manually.";
+          }
           await storage.updateCampaign(id, {
             teaserJobStatus: "failed",
-            teaserJobError: `yt-dlp exited with code ${code}`,
+            teaserJobError,
           });
-          res.write(`data: ${JSON.stringify({ error: "yt-dlp exited with code " + code })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: teaserJobError })}\n\n`);
         }
         res.end();
       });

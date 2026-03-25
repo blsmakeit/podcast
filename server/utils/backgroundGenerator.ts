@@ -169,27 +169,32 @@ export async function generateBackgroundWithGemini(options: {
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(options.geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "imagen-3.0-generate-002" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-preview-image-generation",
+    });
 
     const prompt = GEMINI_PROMPTS[options.style] ?? GEMINI_PROMPTS.aurora;
 
-    const result = await (model as any).generateContent({
+    const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ["IMAGE"] },
+      generationConfig: {
+        responseModalities: ["IMAGE"],
+      } as any,
     });
 
-    const candidate = result?.response?.candidates?.[0];
-    const imagePart = candidate?.content?.parts?.find((p: any) => p.inlineData);
+    const imagePart = result.response.candidates?.[0]?.content?.parts?.find(
+      (p: any) => p.inlineData?.mimeType?.startsWith("image/")
+    );
 
-    if (imagePart?.inlineData?.data) {
-      return {
-        imageBase64: imagePart.inlineData.data,
-        mimeType: imagePart.inlineData.mimeType ?? "image/png",
-      };
+    if (!imagePart?.inlineData) {
+      console.warn("[Gemini] No image in response — falling back to SVG");
+      return null;
     }
 
-    console.warn("[Gemini] No image data in response — falling back to SVG");
-    return null;
+    return {
+      imageBase64: imagePart.inlineData.data,
+      mimeType: imagePart.inlineData.mimeType,
+    };
   } catch (err) {
     console.warn("[Gemini] Image generation failed:", (err as Error).message, "— falling back to SVG");
     return null;
