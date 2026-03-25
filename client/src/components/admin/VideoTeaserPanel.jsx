@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,17 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
   const [cookiesUploaded, setCookiesUploaded] = useState(false);
   const [isUploadingCookies, setIsUploadingCookies] = useState(false);
   const [showReupload, setShowReupload] = useState(false);
+
+  useEffect(() => {
+    if (!isUploading) return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "Video upload in progress. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isUploading]);
 
   const { data: teaserStatus, isLoading: loadingStatus } = useQuery({
     queryKey: [`/api/social-media/campaigns/${campaignId}/teaser/status`],
@@ -217,6 +228,35 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
         <CardTitle className="text-base">Video Teaser Clip (20s)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Upload in progress banner */}
+        {isUploading && (
+          <div className="p-4 rounded-lg bg-blue-50 border-2 border-blue-300 space-y-3">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-blue-800">
+                  Uploading video — do not navigate away
+                </p>
+                <p className="text-xs text-blue-700">
+                  Closing this page will cancel the upload.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-blue-700">
+                <span>Upload progress</span>
+                <span className="font-mono font-bold">{uploadProgress}%</span>
+              </div>
+              <div className="h-3 bg-blue-100 rounded-full overflow-hidden border border-blue-200">
+                <div
+                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* YouTube auto-download */}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Auto-download from YouTube</p>
@@ -323,26 +363,16 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
           </div>
         ) : (
           <div
-            className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
-            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              isUploading
+                ? "opacity-50 cursor-not-allowed border-muted"
+                : "cursor-pointer hover:border-primary"
+            }`}
+            onClick={() => { if (!isUploading) fileInputRef.current?.click(); }}
           >
             <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
             <p className="text-sm font-medium">Drop MP4/MOV here or click to upload</p>
             <p className="text-xs text-muted-foreground mt-1">Max 4GB</p>
-          </div>
-        )}
-        {isUploading && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Uploading video…</span>
-              <span>{uploadProgress}%</span>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
           </div>
         )}
 

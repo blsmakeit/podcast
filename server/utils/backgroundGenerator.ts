@@ -175,7 +175,7 @@ export async function generateBackgroundWithGemini(options: {
     const client = new GoogleGenAI({ apiKey: options.geminiApiKey });
 
     const response = await client.models.generateContent({
-      model: "gemini-2.0-flash-preview-image-generation",
+      model: "gemini-3.1-flash-image-preview",
       contents: prompt,
       config: {
         responseModalities: ["IMAGE"],
@@ -195,7 +195,7 @@ export async function generateBackgroundWithGemini(options: {
       return null;
     }
 
-    console.log("[Gemini] Image generated successfully — gemini-2.0-flash-preview-image-generation");
+    console.log("[Gemini] Image generated successfully — gemini-3.1-flash-image-preview");
     return {
       imageBase64: imagePart.inlineData.data,
       mimeType: imagePart.inlineData.mimeType,
