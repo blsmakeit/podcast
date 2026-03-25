@@ -33,6 +33,12 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
 
   console.log('[VideoWorker] Job received:', { campaignId, sourceVideoPath, startSeconds, duration });
 
+  if (!fs.existsSync(FONT_PATH)) {
+    console.error('[VideoWorker] FONT NOT FOUND at:', FONT_PATH);
+    throw new Error(`Font file not found: ${FONT_PATH}`);
+  }
+  console.log('[VideoWorker] Font found:', FONT_PATH);
+
   const outputDir = path.resolve(VIDEO_STORAGE_PATH);
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -49,12 +55,10 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
   try {
     await storage.updateCampaign(campaignId, { teaserJobStatus: 'processing', teaserJobProgress: 5 });
 
-    // ── Step 1: Detect source video dimensions ────────────────────────────
+    // ── Step 1: Check source file ─────────────────────────────────────────
     await job.updateProgress(8);
     console.log('[VideoWorker] Step 1: checking source file exists:', sourceVideoPath);
     console.log('[VideoWorker] Source file exists:', fs.existsSync(sourceVideoPath));
-    const vWidth  = 1920;
-    const vHeight = 1080;
 
     // ── Step 2: Trim 20-second raw clip ──────────────────────────────────
     await job.updateProgress(10);
@@ -80,23 +84,20 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
 
     await runFfmpeg(
       ffmpeg()
-        .input(`color=black:size=${vWidth}x${vHeight}:rate=25:duration=2`)
+        .input('color=c=black:s=1920x1080:r=25:d=2')
         .inputFormat('lavfi')
         .input('anullsrc=channel_layout=stereo:sample_rate=44100')
         .inputFormat('lavfi')
-        .videoFilters([
-          // Red accent bar top
-          `drawbox=x=0:y=0:w=${vWidth}:h=6:color=${BRAND_RED}@1:t=fill`,
-          // Brand name
-          `drawtext=fontfile=${FONT_PATH}:text='MAKEITorBREAKIT':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h*0.35`,
-          // Red underline
-          `drawbox=x=w*0.35:y=h*0.52:w=w*0.30:h=3:color=${BRAND_RED}@1:t=fill`,
-          // Episode title
-          `drawtext=fontfile=${FONT_PATH}:text='${titleSafe}':fontcolor=white@0.85:fontsize=28:x=(w-text_w)/2:y=h*0.58`,
-          // Guest
-          `drawtext=fontfile=${FONT_PATH}:text='${guestSafe}':fontcolor=white@0.65:fontsize=22:x=(w-text_w)/2:y=h*0.66`,
+        .complexFilter([
+          `[0:v]drawbox=x=0:y=0:w=1920:h=6:color=#D42B2B@1:t=fill[v1]`,
+          `[v1]drawtext=fontfile=${FONT_PATH}:text='MAKEITorBREAKIT':fontcolor=white:fontsize=52:x=(w-text_w)/2:y=h*0.35[v2]`,
+          `[v2]drawbox=x=iw*0.35:y=ih*0.52:w=iw*0.30:h=3:color=#D42B2B@1:t=fill[v3]`,
+          `[v3]drawtext=fontfile=${FONT_PATH}:text='${titleSafe}':fontcolor=white@0.85:fontsize=28:x=(w-text_w)/2:y=h*0.58[v4]`,
+          `[v4]drawtext=fontfile=${FONT_PATH}:text='${guestSafe}':fontcolor=white@0.65:fontsize=22:x=(w-text_w)/2:y=h*0.66[vout]`,
         ])
         .outputOptions([
+          '-map', '[vout]',
+          '-map', '1:a',
           '-t', '2',
           '-c:v', 'libx264',
           '-c:a', 'aac',
@@ -114,21 +115,19 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
 
     await runFfmpeg(
       ffmpeg()
-        .input(`color=black:size=${vWidth}x${vHeight}:rate=25:duration=3`)
+        .input('color=c=black:s=1920x1080:r=25:d=3')
         .inputFormat('lavfi')
         .input('anullsrc=channel_layout=stereo:sample_rate=44100')
         .inputFormat('lavfi')
-        .videoFilters([
-          // Red bar bottom
-          `drawbox=x=0:y=${vHeight - 6}:w=${vWidth}:h=6:color=${BRAND_RED}@1:t=fill`,
-          // CTA text
-          `drawtext=fontfile=${FONT_PATH}:text='Vê o episódio completo':fontcolor=white@0.7:fontsize=30:x=(w-text_w)/2:y=h*0.38`,
-          // Brand name large
-          `drawtext=fontfile=${FONT_PATH}:text='MAKEIT.TECH':fontcolor=white:fontsize=64:x=(w-text_w)/2:y=h*0.48`,
-          // Red accent
-          `drawbox=x=w*0.40:y=h*0.60:w=w*0.20:h=4:color=${BRAND_RED}@1:t=fill`,
+        .complexFilter([
+          `[0:v]drawbox=x=0:y=1074:w=1920:h=6:color=#D42B2B@1:t=fill[v1]`,
+          `[v1]drawtext=fontfile=${FONT_PATH}:text='Vê o episódio completo':fontcolor=white@0.7:fontsize=30:x=(w-text_w)/2:y=h*0.38[v2]`,
+          `[v2]drawtext=fontfile=${FONT_PATH}:text='MAKEIT.TECH':fontcolor=white:fontsize=64:x=(w-text_w)/2:y=h*0.48[v3]`,
+          `[v3]drawbox=x=iw*0.40:y=ih*0.60:w=iw*0.20:h=4:color=#D42B2B@1:t=fill[vout]`,
         ])
         .outputOptions([
+          '-map', '[vout]',
+          '-map', '1:a',
           '-t', '3',
           '-c:v', 'libx264',
           '-c:a', 'aac',
