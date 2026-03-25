@@ -4,8 +4,6 @@
  * produces the same background.
  */
 
-import { GoogleGenAI } from "@google/genai";
-
 type Style = "aurora" | "minimal" | "grid";
 
 interface BgOptions {
@@ -164,51 +162,42 @@ export async function generateBackgroundWithGemini(options: {
 }): Promise<{ imageBase64: string; mimeType: string } | null> {
   try {
     const prompts: Record<string, string> = {
-      aurora: `Professional podcast social media background image. Aurora borealis style with PCB circuit board traces. Deep black background. Flowing crimson red and white aurora light waves. Tech hardware R&D aesthetic. Semi-transparent circuit overlay with junction nodes. Strong dark vignette on all edges. Cinematic premium broadcast quality. No text, no people, no logos, no watermarks, no letters.`,
-      minimal: `Minimalist professional dark podcast background. Deep black base. Subtle crimson red circuit board traces on edges and corners. Clean geometric tech lines. Elegant dark vignette. No text, no people, no logos, no letters.`,
-      grid: `Professional dark tech podcast background. Pure black base. Crimson red dot grid pattern with PCB traces and junction nodes. Modern hardware engineering aesthetic. No text, no people, no logos, no letters.`,
+      aurora: `Professional podcast social media background. Aurora borealis style with PCB circuit board traces. Deep black background. Flowing crimson red and white aurora light waves. Tech hardware R&D aesthetic. Circuit overlay with junction nodes. Strong dark vignette on all edges. Cinematic premium broadcast quality. No text, no people, no logos, no watermarks.`,
+      minimal: `Minimalist professional dark podcast background. Deep black base. Subtle crimson red circuit board traces on edges. Clean geometric tech lines. Elegant dark vignette. No text, no people, no logos.`,
+      grid: `Professional dark tech podcast background. Black base. Crimson red dot grid pattern with PCB traces and junction nodes. Modern hardware engineering aesthetic. No text, no people, no logos.`,
     };
 
     const prompt = prompts[options.style] ?? prompts.aurora;
     const aspectRatio = options.width === options.height ? "1:1" : "16:9";
 
-    const client = new GoogleGenAI({ apiKey: options.geminiApiKey });
+    console.log("[Gemini] Starting generateImages, style:", options.style);
 
-    console.log("[Gemini] Starting image generation, style:", options.style);
-    console.log("[Gemini] API key present:", !!options.geminiApiKey);
-    console.log("[Gemini] API key length:", options.geminiApiKey?.length);
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey: options.geminiApiKey });
 
-    const response = await client.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
+    const response = await ai.models.generateImages({
+      model: "imagen-3.0-generate-002",
+      prompt,
       config: {
-        responseModalities: ["TEXT", "IMAGE"],
-      } as any,
+        numberOfImages: 1,
+        outputMimeType: "image/png",
+        aspectRatio,
+      },
     });
 
-    console.log("[Gemini] Response candidates count:", response.candidates?.length);
-    console.log("[Gemini] Parts in first candidate:", response.candidates?.[0]?.content?.parts?.length);
-    response.candidates?.[0]?.content?.parts?.forEach((p: any, i: number) => {
-      console.log(`[Gemini] Part ${i}: type=${p.text ? "text" : p.inlineData ? "image" : "unknown"}, mimeType=${p.inlineData?.mimeType}`);
-    });
+    console.log("[Gemini] generateImages response received");
+    console.log("[Gemini] generatedImages count:", response.generatedImages?.length);
 
-    const parts = response.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find(
-      (p: any) => p.inlineData?.mimeType?.startsWith("image/")
-    );
-
-    if (!imagePart?.inlineData?.data) {
-      console.warn("[Gemini] No image data found in response");
+    const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+    if (!imageBytes) {
+      console.warn("[Gemini] No imageBytes in response");
       return null;
     }
 
-    console.log("[Gemini] Image generated successfully — gemini-2.0-flash-exp");
-    return {
-      imageBase64: imagePart.inlineData.data,
-      mimeType: imagePart.inlineData.mimeType,
-    };
+    console.log("[Gemini] Image generated successfully via Imagen 3");
+    return { imageBase64: imageBytes, mimeType: "image/png" };
   } catch (err: any) {
-    console.error("[Gemini] Image generation failed:", err.message, "— falling back to SVG");
+    console.error("[Gemini] generateImages failed:", err?.message ?? err);
     return null;
   }
 }
