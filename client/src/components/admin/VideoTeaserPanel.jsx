@@ -51,12 +51,24 @@ export default function VideoTeaserPanel({ campaignId, campaign, selectedDraft }
       const json = await res.json();
       return json.data;
     },
-    refetchInterval: (data) => {
-      if (data?.status === "queued" || data?.status === "processing") return 2000;
-      return false;
+    refetchInterval: (query) => {
+      const status = query?.state?.data?.status;
+      if (status === "completed" || status === "failed") return false;
+      return 3000;
     },
     enabled: !isNaN(campaignId),
   });
+
+  useEffect(() => {
+    if (teaserStatus?.status === "completed") {
+      qc.invalidateQueries({
+        queryKey: [`/api/social-media/campaigns/${campaignId}/publication`],
+      });
+      qc.invalidateQueries({
+        queryKey: [`/api/social-media/campaigns/${campaignId}`],
+      });
+    }
+  }, [teaserStatus?.status, qc, campaignId]);
 
   const { mutate: resetTeaser, isPending: isResetting } = useMutation({
     mutationFn: async () => {

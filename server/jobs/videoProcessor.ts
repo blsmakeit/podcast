@@ -167,12 +167,19 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
 
     await runFfmpeg(
       ffmpeg(contentClip)
-        .videoFilters([
-          `drawbox=y=ih*0.85:color=black@0.75:width=iw:height=ih*0.15:t=fill`,
-          `drawbox=y=ih*0.845:color=${BRAND_RED}:width=iw:height=3:t=fill`,
-          `drawtext=fontfile=${FONT_PATH}:text='MAKEITorBREAKIT':fontcolor=white:fontsize=22:x=20:y=h*0.87`,
-          `drawtext=fontfile=${FONT_PATH}:text='${titleLower}':fontcolor=white@0.9:fontsize=16:x=20:y=h*0.91`,
-          `drawtext=fontfile=${FONT_PATH}:text='${guestLower}':fontcolor=white@0.7:fontsize=13:x=20:y=h*0.95`,
+        .complexFilter([
+          `[0:v]drawbox=y=ih*0.85:color=black@0.75:width=iw:height=ih*0.15:t=fill[v1]`,
+          `[v1]drawbox=y=ih*0.845:color=${BRAND_RED}:width=iw:height=3:t=fill[v2]`,
+          `[v2]drawtext=fontfile=${FONT_PATH}:text='MAKEITorBREAKIT':fontcolor=white:fontsize=22:x=20:y=h*0.87[v3]`,
+          `[v3]drawtext=fontfile=${FONT_PATH}:text='${titleLower}':fontcolor=white@0.9:fontsize=16:x=20:y=h*0.91[v4]`,
+          `[v4]drawtext=fontfile=${FONT_PATH}:text='${guestLower}':fontcolor=white@0.7:fontsize=13:x=20:y=h*0.95[vout]`,
+        ])
+        .outputOptions([
+          '-map', '[vout]',
+          '-map', '0:a',
+          '-c:v', 'libx264',
+          '-c:a', 'aac',
+          '-pix_fmt', 'yuv420p',
         ])
         .output(landscapeOutput)
     );
@@ -186,12 +193,21 @@ export const videoWorker = new Worker('video-processing', async (job: any) => {
     await runFfmpeg(
       ffmpeg(landscapeOutput)
         .complexFilter([
-          '[0:v]scale=1080:1920,boxblur=20:5[bg]',
-          '[0:v]scale=1080:607[fg]',
-          '[bg][fg]overlay=0:656[out]',
+          // Background: scale to fill 1080x1920 with crop (no stretch)
+          '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,' +
+          'crop=1080:1920,boxblur=30:5[bg]',
+          // Foreground: scale landscape to fit 1080px wide, keep aspect ratio
+          '[0:v]scale=1080:-2[fg]',
+          // Overlay foreground centred vertically on background
+          '[bg][fg]overlay=x=0:y=(H-h)/2[vout]',
         ])
-        .map('[out]')
-        .addOption('-map', '0:a')
+        .outputOptions([
+          '-map', '[vout]',
+          '-map', '0:a',
+          '-c:v', 'libx264',
+          '-c:a', 'aac',
+          '-pix_fmt', 'yuv420p',
+        ])
         .output(portraitOutput)
     );
     console.log('[VideoWorker] Step 7 complete: portrait output ready');
